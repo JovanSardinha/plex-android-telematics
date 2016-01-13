@@ -9,12 +9,22 @@
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
     app:layout_behavior="@string/appbar_scrolling_view_behavior"
-    tools:context="ai.plex.poc.android.Welcome"
+    tools:context=".activities.Welcome"
     tools:showIn="@layout/activity_welcome">
+
+    <CheckBox
+        android:layout_width="400px"
+        android:layout_height="100px"
+        android:text="Currently Driving"
+        android:id="@+id/isDrivingcheckBox"
+        android:onClick="onCheckboxClicked"/>
 
     <Button
         android:layout_width="400px"
         android:layout_height="100px"
-        android:text="Start the service"
-        android:onClick=""/>
+        android:text="Submit Data"
+        android:onClick="onSubmitDataClicked"
+        android:layout_below="@+id/isDrivingcheckBox"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 </RelativeLayout>
