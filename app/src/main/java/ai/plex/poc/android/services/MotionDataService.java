@@ -12,6 +12,8 @@ import android.hardware.SensorManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
@@ -73,13 +75,9 @@ public class MotionDataService extends IntentService {
         }
     }
 
-    private void readSensorData() {
+    private void readSensorData() throws InterruptedException {
         SensorManager mSensorManager= (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        List<Sensor> deviceSensors = mSensorManager.getSensorList(Sensor.TYPE_ALL);
-        for (Sensor sensor: deviceSensors
-             ) {
-            Log.d("Sensors", "readSensorData: " + sensor.toString());
-        }
+
 
         Sensor accelerationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         Sensor linearAccelerationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
@@ -87,24 +85,30 @@ public class MotionDataService extends IntentService {
         Sensor rotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         Sensor magneticSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
+        HandlerThread sensorHandlerThread = new HandlerThread("SesnorListener");
+
+        sensorHandlerThread.start();
+
+        Handler sensorHandler = new Handler(sensorHandlerThread.getLooper());
+
         if ( accelerationSensor!= null){
-            mSensorManager.registerListener(new AccelerationMonitor(this.getApplicationContext()), accelerationSensor, 1000000);
+            mSensorManager.registerListener(new AccelerationMonitor(this.getApplicationContext()), accelerationSensor, 1000000, sensorHandler);
         }
         if (linearAccelerationSensor != null)
         {
-            mSensorManager.registerListener(new LinearAccelerationMonitor(this.getApplicationContext()), linearAccelerationSensor, 1000000);
+            //mSensorManager.registerListener(new LinearAccelerationMonitor(this.getApplicationContext()), linearAccelerationSensor, 1000000, sensorHandler);
         }
         if (gyroscopeSensor != null)
         {
-            mSensorManager.registerListener(new GyroscopeMonitor(this.getApplicationContext()), gyroscopeSensor, 1000000);
+            //mSensorManager.registerListener(new GyroscopeMonitor(this.getApplicationContext()), gyroscopeSensor, 1000000, sensorHandler);
         }
         if (rotationSensor != null)
         {
-            mSensorManager.registerListener(new RotationMonitor(this.getApplicationContext()), rotationSensor, 1000000);
+            //mSensorManager.registerListener(new RotationMonitor(this.getApplicationContext()), rotationSensor, 1000000, sensorHandler);
         }
         if (magneticSensor != null)
         {
-            mSensorManager.registerListener(new MagneticMonitor(this.getApplicationContext()), magneticSensor, 1000000);
+            //mSensorManager.registerListener(new MagneticMonitor(this.getApplicationContext()), magneticSensor, 1000000, sensorHandler);
         }
     }
 }

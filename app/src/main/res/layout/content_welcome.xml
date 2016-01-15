@@ -14,14 +14,14 @@
 
     <CheckBox
         android:layout_width="400px"
-        android:layout_height="100px"
+        android:layout_height="200px"
         android:text="Currently Driving"
         android:id="@+id/isDrivingcheckBox"
         android:onClick="onCheckboxClicked"/>
 
     <Button
         android:layout_width="400px"
-        android:layout_height="100px"
+        android:layout_height="150px"
         android:text="Submit Data"
         android:onClick="onSubmitDataClicked"
         android:layout_below="@+id/isDrivingcheckBox"

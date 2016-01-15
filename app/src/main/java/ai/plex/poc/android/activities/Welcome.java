@@ -37,6 +37,8 @@ import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotContract;
@@ -105,22 +107,31 @@ public class Welcome extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void onSubmitDataClicked(View button){
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
-        SubmitAcceleration(db);
-        SubmitLinearAcceleration(db);
-        SubmitGyroscope(db);
-        SubmitMagnetic(db);
-        SubmitRotation(db);
+    public void onSubmitDataClicked(View button) {
+        try {
+            SubmitAcceleration();
+            //SubmitLinearAcceleration();
+            //SubmitGyroscope();
+            //SubmitMagnetic();
+            //SubmitRotation();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        } finally {
+        }
     }
 
-    public void SubmitAcceleration(SQLiteDatabase db){
+    public void SubmitAcceleration() {
+        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Cursor cursor = null;
+        Integer lastRecord = -1;
         try {
-            Cursor cursor = db.rawQuery("Select * from " + SnapShotContract.AccelerationEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.AccelerationEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
 
                 Log.d("ACCELERATION", String.valueOf(cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X))));
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.AccelerationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Y));
                 float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Z));
@@ -135,20 +146,26 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put("y", y);
                 responseObject.put("z", z);
                 responseObject.put("isDriving", isDriving);
-                responseObject.put("userId", "tjudi");
+                responseObject.put("userId", "jSardinha");
 
-                new PostDataTask().execute(responseObject.toString(),"androidAcceleration");
+                data.add(responseObject);
             }
-            db.delete(SnapShotContract.AccelerationEntry.TABLE_NAME, null, null);
-
-        } catch (Exception ex){
-            Log.e("Write Excption","Error writing data!");
+            new PostDataTask().execute(data);
+            int count = db.delete(SnapShotContract.AccelerationEntry.TABLE_NAME, SnapShotContract.AccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
         }
     }
 
-    public void SubmitLinearAcceleration(SQLiteDatabase db){
+    public void SubmitLinearAcceleration() {
+        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        Cursor cursor = null;
         try {
-            Cursor cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
 
@@ -166,21 +183,26 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put("y", y);
                 responseObject.put("z", z);
                 responseObject.put("isDriving", isDriving);
-                responseObject.put("userId", "tjudi");
+                responseObject.put("userId", "jSardinha");
 
-                new PostDataTask().execute(responseObject.toString(),"androidLinearAcceleration");
+                //new PostDataTask().execute(responseObject.toString(), "androidLinearAcceleration");
             }
 
             db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, null);
 
-        } catch (Exception ex){
-            Log.e("Write Excption","Error writing data!");
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
         }
     }
 
-    public void SubmitGyroscope(SQLiteDatabase db){
+    public void SubmitGyroscope() {
+        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        Cursor cursor = null;
         try {
-            Cursor cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
 
@@ -198,21 +220,26 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, y);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, z);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "tjudi");
+                responseObject.put("userId", "jSardinha");
 
-                new PostDataTask().execute(responseObject.toString(),"androidGyroscope");
+                //new PostDataTask().execute(responseObject.toString(), "androidGyroscope");
             }
 
             db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, null);
 
-        } catch (Exception ex){
-            Log.e("Write Excption","Error writing data!");
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
         }
     }
 
-    public void SubmitMagnetic(SQLiteDatabase db){
+    public void SubmitMagnetic() {
+        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        Cursor cursor = null;
         try {
-            Cursor cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
 
@@ -230,21 +257,26 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Y, y);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Z, z);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "tjudi");
+                responseObject.put("userId", "jSardinha");
 
-                new PostDataTask().execute(responseObject.toString(),"androidMagnetic");
+                //new PostDataTask().execute(responseObject.toString(), "androidMagnetic");
             }
 
             db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, null, null);
 
-        } catch (Exception ex){
-            Log.e("Write Excption","Error writing data!");
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
         }
     }
 
-    public void SubmitRotation(SQLiteDatabase db){
+    public void SubmitRotation() {
+        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        Cursor cursor = null;
         try {
-            Cursor cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
 
@@ -266,80 +298,85 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_COS, cos);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, accuracy);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "tjudi");
+                responseObject.put("userId", "jSardinha");
 
-                new PostDataTask().execute(responseObject.toString(),"androidRotation");
+               // new PostDataTask().execute(responseObject.toString(), "androidRotation");
             }
 
             db.delete(SnapShotContract.RotationEntry.TABLE_NAME, null, null);
 
-        } catch (Exception ex){
-            Log.e("Write Excption","Error writing data!");
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
         }
     }
 
 
 
-    public class PostDataTask extends AsyncTask<String, Void, Void> {
-        protected Void doInBackground(String... events){
+    public class PostDataTask extends AsyncTask<ArrayList<JSONObject>, Void, Void> {
+        protected Void doInBackground(ArrayList<JSONObject>... events){
 
             ConnectivityManager connMgr = (ConnectivityManager)
                     getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
             if (networkInfo != null && networkInfo.isConnected()) {
-                InputStream is = null;
-                // Only display the first 500 characters of the retrieved
-                // web page content.
-                int len = 500;
 
-                try {
-                    //Define the URL
-                    //URL url = new URL("http://10.42.0.1:8080/"+ events[1]);
-                    URL url = new URL("http://40.122.215.160:8080/"+ events[1]);
+                for ( JSONObject dataPoint : events[0]){
+                    InputStream is = null;
+                    // Only display the first 500 characters of the retrieved
+                    // web page content.
+                    int len = 500;
 
-                    String message = events[0];
+                    try {
+                        //Define the URL
+                        URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ "androidAcceleration");
 
-                    //Open a connection
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    //Set connection details
-                    conn.setReadTimeout(10000 /* milliseconds */);
-                    conn.setConnectTimeout(15000 /* milliseconds */);
-                    conn.setRequestMethod("POST");
-                    conn.setDoInput(true);
-                    conn.setDoOutput(true);
+                        String message = dataPoint.toString();
+
+                        //Open a connection
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        //Set connection details
+                        conn.setReadTimeout(10000 /* milliseconds */);
+                        conn.setConnectTimeout(15000 /* milliseconds */);
+                        conn.setRequestMethod("POST");
+                        conn.setDoInput(true);
+                        conn.setDoOutput(true);
 
 
-                    //Set header details
-                    conn.setRequestProperty("Content-Type","application/json;charset=utf-8");
-                    conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+                        //Set header details
+                        conn.setRequestProperty("Content-Type","application/json;charset=utf-8");
+                        conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
 
-                    //Connect
-                    conn.connect();
+                        //Connect
+                        conn.connect();
 
-                    //Setup data to send
-                    OutputStream os = new BufferedOutputStream(conn.getOutputStream());
-                    os.write(message.getBytes());
-                    os.flush();
+                        //Setup data to send
+                        OutputStream os = new BufferedOutputStream(conn.getOutputStream());
+                        os.write(message.getBytes());
+                        os.flush();
 
-                    //Write the data
-                    OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
-                    wr.write(events[0]);
-                    wr.flush();
+                        //Write the data
+                        OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
+                        wr.write(message);
+                        wr.flush();
 
-                    int response = conn.getResponseCode();
-                    Log.d("DEBUG_TAG", "The response is: " + response);
-                    is = conn.getInputStream();
-                    // Convert the InputStream into a string
-                    String contentAsString = readIt(is, len);
-                    Log.d("DEBUG_TAG", "The response data is: " + contentAsString);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                } finally {
-                    if (is != null) {
-                        try {
-                            is.close();
-                        } catch (IOException e) {
-                            e.printStackTrace();
+                        int response = conn.getResponseCode();
+                        Log.d("Record Submitted", "The response is: " + response);
+                        is = conn.getInputStream();
+                        // Convert the InputStream into a string
+                        String contentAsString = readIt(is, len);
+                        //Log.d("DEBUG_TAG", "The response data is: " + contentAsString);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        if (is != null) {
+                            try {
+                                is.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                 }
