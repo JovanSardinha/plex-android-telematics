@@ -15,8 +15,17 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
 
     public static final String DATABASE_NAME = "snapShot.db";
 
+    private static SnapShotDBHelper sInstance;
+
     public SnapShotDBHelper(Context context){
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
+    }
+
+    public static synchronized SnapShotDBHelper getsInstance(Context context){
+        if (sInstance == null){
+            sInstance = new SnapShotDBHelper(context.getApplicationContext());
+        }
+        return sInstance;
     }
 
     @Override

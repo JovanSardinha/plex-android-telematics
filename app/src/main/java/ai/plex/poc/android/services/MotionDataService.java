@@ -92,7 +92,7 @@ public class MotionDataService extends IntentService {
         Handler sensorHandler = new Handler(sensorHandlerThread.getLooper());
 
         if ( accelerationSensor!= null){
-            mSensorManager.registerListener(new AccelerationMonitor(this.getApplicationContext()), accelerationSensor, 1000000, sensorHandler);
+            mSensorManager.registerListener(new AccelerationMonitor(this.getApplicationContext()), accelerationSensor, 100000000, sensorHandler);
         }
         if (linearAccelerationSensor != null)
         {

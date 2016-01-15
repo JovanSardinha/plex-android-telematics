@@ -121,7 +121,7 @@ public class Welcome extends AppCompatActivity {
     }
 
     public void SubmitAcceleration() {
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Cursor cursor = null;
         Integer lastRecord = -1;
@@ -162,7 +162,7 @@ public class Welcome extends AppCompatActivity {
     }
 
     public void SubmitLinearAcceleration() {
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null);
@@ -199,7 +199,7 @@ public class Welcome extends AppCompatActivity {
     }
 
     public void SubmitGyroscope() {
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME, null);
@@ -236,7 +236,7 @@ public class Welcome extends AppCompatActivity {
     }
 
     public void SubmitMagnetic() {
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME, null);
@@ -273,7 +273,7 @@ public class Welcome extends AppCompatActivity {
     }
 
     public void SubmitRotation() {
-        SQLiteDatabase db = new SnapShotDBHelper(this).getWritableDatabase();
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME, null);

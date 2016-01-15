@@ -37,7 +37,7 @@ public class SensorDataWriter {
 
         if (isDriving) {
             try {
-                    this.db = new SnapShotDBHelper(context).getWritableDatabase();
+                    this.db = SnapShotDBHelper.getsInstance(context).getWritableDatabase();
                     ContentValues values = new ContentValues();
                     long rowId = -1;
 
