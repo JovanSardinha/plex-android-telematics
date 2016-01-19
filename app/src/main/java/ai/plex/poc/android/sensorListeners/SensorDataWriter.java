@@ -6,12 +6,9 @@ import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
-import android.os.AsyncTask;
 import android.preference.PreferenceManager;
 import android.util.Log;
-
 import java.util.Date;
-
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 
@@ -33,9 +30,10 @@ public class SensorDataWriter {
         // Many sensors return 3 values, one for each axis.
         //Check if the person is currently driving
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean isRecording = prefs.getBoolean("isRecording", false);
         boolean isDriving = prefs.getBoolean("isDriving", false);
 
-        if (isDriving) {
+        if (isRecording) {
             try {
                     this.db = SnapShotDBHelper.getsInstance(context).getWritableDatabase();
                     ContentValues values = new ContentValues();
@@ -85,9 +83,7 @@ public class SensorDataWriter {
                             rowId = db.insert(SnapShotContract.RotationEntry.TABLE_NAME, null, values);
                             break;
                     }
-                    Log.d("Record Written", String.valueOf(rowId));
-
-
+                    Log.d(this.sensorType + " Record Written", String.valueOf(rowId));
             } catch (Exception ex){
                 ex.printStackTrace();
             } finally {

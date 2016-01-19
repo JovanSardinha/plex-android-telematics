@@ -1,29 +1,26 @@
 package ai.plex.poc.android.activities;
 
-import android.app.IntentService;
-import android.app.Notification;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
-import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.CheckBox;
+import android.widget.Switch;
+import android.widget.ToggleButton;
 
 import org.json.JSONObject;
 
@@ -38,16 +35,13 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.List;
 
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
-import ai.plex.poc.android.services.Constants;
 import ai.plex.poc.android.services.MotionDataService;
 
 public class Welcome extends AppCompatActivity {
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,26 +58,92 @@ public class Welcome extends AppCompatActivity {
             }
         });
 
-        CheckBox checkBox1 = (CheckBox) findViewById(R.id.isDrivingcheckBox);
-        boolean checked = PreferenceManager.getDefaultSharedPreferences(this)
-                .getBoolean("isDriving", false);
-        checkBox1.setChecked(checked);
+        setCheckBoxesFromPreferences();
 
         //Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
         startService(mServiceIntent);
     }
 
-    public void onCheckboxClicked(View view) {
-        // Is the view now checked?
-        boolean checked = ((CheckBox) view).isChecked();
+    private void setCheckBoxesFromPreferences(){
+        ToggleButton drivingToggle = (ToggleButton) findViewById(R.id.isDrivingToggleButton);
+        ToggleButton recordingToggle = (ToggleButton) findViewById(R.id.isRecordingToggleButton);
+        Switch accelerationSwitch = (Switch) findViewById(R.id.accelerationSwitch);
+        Switch gyroscopeSwitch = (Switch) findViewById(R.id.gyroscopeSwitch);
+        Switch magnoSwitch = (Switch) findViewById(R.id.magneticSwitch);
+        Switch rotationSwitch = (Switch) findViewById(R.id.rotationSwitch);
 
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean isDriving = prefs.getBoolean("isDriving", false);
+        boolean isRecording = prefs.getBoolean("isRecording", false);
+        boolean isTrackingAcceleration = prefs.getBoolean("isTrackingAcceleration", false);
+        boolean isTrackingGyroscope = prefs.getBoolean("isTrackingGyroscope", false);
+        boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
+        boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
+
+        recordingToggle.setChecked(isRecording);
+        drivingToggle.setChecked(isDriving);
+        accelerationSwitch.setChecked(isTrackingAcceleration);
+        gyroscopeSwitch.setChecked(isTrackingGyroscope);
+        magnoSwitch.setChecked(isTrackingMagnetic);
+        rotationSwitch.setChecked(isTrackingRotation);
+    }
+
+    public void onClicked(View view) {
+        boolean checked = false;
         // Check which checkbox was clicked
         switch(view.getId()) {
-            case R.id.isDrivingcheckBox:
+            case R.id.isDrivingToggleButton:
+                checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", checked).commit();
                 break;
+            case R.id.isRecordingToggleButton:
+                checked = ((ToggleButton) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", checked).commit();
+                restartMotionDataService();
+                break;
+            case R.id.accelerationSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingAcceleration", checked).commit();
+                restartMotionDataService();
+                break;
+            case R.id.gyroscopeSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingGyroscope", checked).commit();
+                restartMotionDataService();
+                break;
+            case R.id.magneticSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingMagnetic", checked).commit();
+                restartMotionDataService();
+                break;
+            case R.id.rotationSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingRotation", checked).commit();
+                restartMotionDataService();
+                break;
+            case R.id.clearButton:
+                SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
+                break;
+            case R.id.submitButton:
+                try {
+                        SubmitLinearAcceleration();
+                        SubmitGyroscope();
+                        SubmitMagnetic();
+                        SubmitRotation();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                }
         }
+    }
+
+
+    private void restartMotionDataService() {
+        //Restart Service
+        Intent mServiceIntent = new Intent(this, MotionDataService.class);
+        mServiceIntent.putExtra("Restart", true);
+        startService(mServiceIntent);
     }
 
     @Override
@@ -107,19 +167,6 @@ public class Welcome extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void onSubmitDataClicked(View button) {
-        try {
-            SubmitAcceleration();
-            //SubmitLinearAcceleration();
-            //SubmitGyroscope();
-            //SubmitMagnetic();
-            //SubmitRotation();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        } finally {
-        }
-    }
-
     public void SubmitAcceleration() {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
@@ -141,11 +188,11 @@ public class Welcome extends AppCompatActivity {
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
-                responseObject.put("timestamp", timestamp);
-                responseObject.put("x", x);
-                responseObject.put("y", y);
-                responseObject.put("z", z);
-                responseObject.put("isDriving", isDriving);
+                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP, timestamp);
+                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_X, x);
+                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Y, y);
+                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Z, z);
+                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", "jSardinha");
 
                 data.add(responseObject);
@@ -163,12 +210,14 @@ public class Welcome extends AppCompatActivity {
 
     public void SubmitLinearAcceleration() {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Integer lastRecord = -1;
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
-
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_X));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Y));
                 float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Z));
@@ -178,18 +227,19 @@ public class Welcome extends AppCompatActivity {
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
-                responseObject.put("timestamp", timestamp);
-                responseObject.put("x", x);
-                responseObject.put("y", y);
-                responseObject.put("z", z);
-                responseObject.put("isDriving", isDriving);
+                responseObject.put("dataType",SnapShotContract.LinearAccelerationEntry.TABLE_NAME);
+                responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP, timestamp);
+                responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_X, x);
+                responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Y, y);
+                responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Z, z);
+                responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", "jSardinha");
 
-                //new PostDataTask().execute(responseObject.toString(), "androidLinearAcceleration");
+                data.add(responseObject);
             }
-
-            db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, null);
-
+            new PostDataTask().execute(data);
+            int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, SnapShotContract.LinearAccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
         } finally {
@@ -200,12 +250,14 @@ public class Welcome extends AppCompatActivity {
 
     public void SubmitGyroscope() {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Integer lastRecord = -1;
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
-
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y));
                 float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z));
@@ -215,6 +267,7 @@ public class Welcome extends AppCompatActivity {
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
+                responseObject.put("dataType",SnapShotContract.GyroscopeEntry.TABLE_NAME);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP, timestamp);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, x);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, y);
@@ -222,11 +275,11 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", "jSardinha");
 
-                //new PostDataTask().execute(responseObject.toString(), "androidGyroscope");
+                data.add(responseObject);
             }
-
-            db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, null);
-
+            new PostDataTask().execute(data);
+            int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
         } finally {
@@ -237,12 +290,14 @@ public class Welcome extends AppCompatActivity {
 
     public void SubmitMagnetic() {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Integer lastRecord = -1;
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
-
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.MagneticEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_X));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Y));
                 float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Z));
@@ -252,18 +307,18 @@ public class Welcome extends AppCompatActivity {
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
+                responseObject.put("dataType",SnapShotContract.MagneticEntry.TABLE_NAME);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP, timestamp);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_X, x);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Y, y);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Z, z);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", "jSardinha");
-
-                //new PostDataTask().execute(responseObject.toString(), "androidMagnetic");
+                data.add(responseObject);
             }
-
-            db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, null, null);
-
+            new PostDataTask().execute(data);
+            int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
         } finally {
@@ -274,12 +329,13 @@ public class Welcome extends AppCompatActivity {
 
     public void SubmitRotation() {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Integer lastRecord = -1;
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME, null);
-
             while (cursor.moveToNext()) {
-
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.RotationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_X_SIN));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Y_SIN));
                 float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Z_SIN));
@@ -291,6 +347,7 @@ public class Welcome extends AppCompatActivity {
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
+                responseObject.put("dataType",SnapShotContract.RotationEntry.TABLE_NAME);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP, timestamp);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_X_SIN, x);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_Y_SIN, y);
@@ -300,11 +357,11 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", "jSardinha");
 
-               // new PostDataTask().execute(responseObject.toString(), "androidRotation");
+                data.add(responseObject);
             }
-
-            db.delete(SnapShotContract.RotationEntry.TABLE_NAME, null, null);
-
+            new PostDataTask().execute(data);
+            int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
         } finally {
@@ -313,14 +370,35 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-
-
     public class PostDataTask extends AsyncTask<ArrayList<JSONObject>, Void, Void> {
         protected Void doInBackground(ArrayList<JSONObject>... events){
 
             ConnectivityManager connMgr = (ConnectivityManager)
                     getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+
+            String dataType = "";
+            String api_route = "";
+            try {
+                 dataType = events[0].get(0).get("dataType").toString();
+                switch (dataType){
+                    case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
+                        api_route = "androidLinearAcceleration";
+                        break;
+                    case SnapShotContract.GyroscopeEntry.TABLE_NAME:
+                        api_route = "androidGyroscope";
+                        break;
+                    case SnapShotContract.MagneticEntry.TABLE_NAME:
+                        api_route = "androidMagnetic";
+                        break;
+                    case SnapShotContract.RotationEntry.TABLE_NAME:
+                        api_route = "androidRotation";
+                        break;
+                }
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+
             if (networkInfo != null && networkInfo.isConnected()) {
 
                 for ( JSONObject dataPoint : events[0]){
@@ -331,7 +409,7 @@ public class Welcome extends AppCompatActivity {
 
                     try {
                         //Define the URL
-                        URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ "androidAcceleration");
+                        URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ api_route);
 
                         String message = dataPoint.toString();
 

@@ -1,9 +1,11 @@
 package ai.plex.poc.android.database;
 
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.hardware.Sensor;
+import android.util.Log;
 
 import ai.plex.poc.android.database.SnapShotContract.*;
 
@@ -95,5 +97,22 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXITS "+ AccelerationEntry.TABLE_NAME);
         db.execSQL("DROP TABLE IF EXITS "+ DataManagerEntry.TABLE_NAME);
         onCreate(db);
+    }
+
+    public static boolean clearTables(SQLiteDatabase db){
+        try {
+            Integer count1 = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, SnapShotContract.AccelerationEntry._ID + ">=?", new String[]{String.valueOf(0)});
+            Integer count2 = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry._ID + ">=?", new String[]{String.valueOf(0)});
+            Integer count3 = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry._ID + ">=?", new String[]{String.valueOf(0)});
+            Integer count4 = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry._ID + ">=?", new String[]{String.valueOf(0)});
+            Log.d("Deleted from Acce ", String.valueOf(count1));
+            Log.d("Deleted from Gyroscope ", String.valueOf(count2));
+            Log.d("Deleted from Magnetic ", String.valueOf(count3));
+            Log.d("Deleted from Rotation ", String.valueOf(count4));
+            return  true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

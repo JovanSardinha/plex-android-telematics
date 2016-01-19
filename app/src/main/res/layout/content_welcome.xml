@@ -12,19 +12,120 @@
     tools:context=".activities.Welcome"
     tools:showIn="@layout/activity_welcome">
 
-    <CheckBox
+    <Button
         android:layout_width="400px"
-        android:layout_height="200px"
-        android:text="Currently Driving"
-        android:id="@+id/isDrivingcheckBox"
-        android:onClick="onCheckboxClicked"/>
+        android:layout_height="170px"
+        android:text="Submit Data"
+        android:onClick="onClicked"
+        android:id="@+id/submitButton"
+        android:layout_below="@+id/magneticSwitch"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="48dp" />
+
+    <ToggleButton
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="New ToggleButton"
+        android:id="@+id/isRecordingToggleButton"
+        android:layout_alignParentTop="true"
+        android:layout_alignLeft="@+id/isDrivingToggleButton"
+        android:layout_alignStart="@+id/isDrivingToggleButton"
+        android:onClick="onClicked" />
+
+    <ToggleButton
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="New ToggleButton"
+        android:id="@+id/isDrivingToggleButton"
+        android:layout_below="@+id/isRecordingToggleButton"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentEnd="true"
+        android:onClick="onClicked" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="Data Recording"
+        android:id="@+id/isRecordingTextView"
+        android:textSize="25dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="Driving Mode"
+        android:id="@+id/isDrivingTextView"
+        android:textSize="25dp"
+        android:layout_alignTop="@+id/isDrivingToggleButton"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
+
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Acceleration"
+        android:id="@+id/accelerationSwitch"
+        android:checked="false"
+        android:layout_marginTop="24dp"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignRight="@+id/isDrivingToggleButton"
+        android:layout_alignEnd="@+id/isDrivingToggleButton"
+        android:layout_below="@+id/isDrivingToggleButton"
+        android:onClick="onClicked" />
+
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Gyroscope"
+        android:id="@+id/gyroscopeSwitch"
+        android:checked="false"
+        android:layout_below="@+id/rotationSwitch"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignRight="@+id/rotationSwitch"
+        android:layout_alignEnd="@+id/rotationSwitch"
+        android:onClick="onClicked" />
+
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Magnetic Sensor"
+        android:id="@+id/magneticSwitch"
+        android:checked="false"
+        android:layout_below="@+id/gyroscopeSwitch"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignRight="@+id/gyroscopeSwitch"
+        android:layout_alignEnd="@+id/gyroscopeSwitch"
+        android:onClick="onClicked" />
+
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Rotation"
+        android:id="@+id/rotationSwitch"
+        android:checked="false"
+        android:layout_below="@+id/accelerationSwitch"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignRight="@+id/accelerationSwitch"
+        android:layout_alignEnd="@+id/accelerationSwitch"
+        android:onClick="onClicked" />
 
     <Button
         android:layout_width="400px"
-        android:layout_height="150px"
-        android:text="Submit Data"
-        android:onClick="onSubmitDataClicked"
-        android:layout_below="@+id/isDrivingcheckBox"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true" />
+        android:layout_height="170px"
+        android:text="Clear Data"
+        android:id="@+id/clearButton"
+        android:layout_below="@+id/submitButton"
+        android:layout_alignRight="@+id/submitButton"
+        android:layout_alignEnd="@+id/submitButton"
+        android:onClick="onClicked"/>
+
 </RelativeLayout>

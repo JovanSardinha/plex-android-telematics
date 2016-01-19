@@ -4,15 +4,20 @@ import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 
 /**
  * Created by terek on 07/01/16.
  */
 public class LinearAccelerationMonitor implements SensorEventListener {
     private Context applicationContext;
+    private SensorManager sensorManager;
+    private Sensor sensor;
 
-    public LinearAccelerationMonitor(Context context){
+    public LinearAccelerationMonitor(Context context, Sensor sensor){
         this.applicationContext = context;
+        this.sensorManager = (SensorManager)applicationContext.getSystemService(Context.SENSOR_SERVICE);
+        this.sensor = sensor;
     }
 
     @Override
@@ -22,7 +27,10 @@ public class LinearAccelerationMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        //new SensorDataWriter(applicationContext,Sensor.TYPE_LINEAR_ACCELERATION).execute(event);
+        new SensorDataWriter(applicationContext,Sensor.TYPE_LINEAR_ACCELERATION).writeData(event);
+    }
 
+    public void pause() {
+        sensorManager.unregisterListener(this, sensor);
     }
 }

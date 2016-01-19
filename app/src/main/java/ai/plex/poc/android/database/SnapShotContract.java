@@ -18,7 +18,7 @@ public class SnapShotContract {
     }
 
     public static final class LinearAccelerationEntry implements BaseColumns{
-        public static final String TABLE_NAME = "lilnearAcceleration";
+        public static final String TABLE_NAME = "linearAcceleration";
         public static final String COLUMN_TIMESTAMP = "timestamp";
         public static final String COLUMN_X = "x";
         public static final String COLUMN_Y = "y";

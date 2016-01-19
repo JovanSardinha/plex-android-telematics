@@ -44,9 +44,13 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
  */
 public class AccelerationMonitor implements SensorEventListener {
     private Context applicationContext;
+    private SensorManager sensorManager;
+    private Sensor sensor;
 
-    public AccelerationMonitor(Context context){
+    public AccelerationMonitor(Context context, Sensor sensor){
         this.applicationContext = context;
+        this.sensorManager = (SensorManager)applicationContext.getSystemService(Context.SENSOR_SERVICE);
+        this.sensor = sensor;
     }
 
     @Override
@@ -59,5 +63,7 @@ public class AccelerationMonitor implements SensorEventListener {
         new SensorDataWriter(applicationContext,Sensor.TYPE_ACCELEROMETER).writeData(event);
     }
 
-
+    protected void pause() {
+        sensorManager.unregisterListener(this, sensor);
+    }
 }
