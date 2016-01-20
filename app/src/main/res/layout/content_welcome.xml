@@ -18,10 +18,10 @@
         android:text="Submit Data"
         android:onClick="onClicked"
         android:id="@+id/submitButton"
-        android:layout_below="@+id/magneticSwitch"
+        android:layout_marginTop="32dp"
+        android:layout_below="@+id/textView2"
         android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_marginTop="48dp" />
+        android:layout_alignParentStart="true" />
 
     <ToggleButton
         android:layout_width="wrap_content"
@@ -123,9 +123,29 @@
         android:layout_height="170px"
         android:text="Clear Data"
         android:id="@+id/clearButton"
+        android:onClick="onClicked"
         android:layout_below="@+id/submitButton"
-        android:layout_alignRight="@+id/submitButton"
-        android:layout_alignEnd="@+id/submitButton"
-        android:onClick="onClicked"/>
+        android:layout_alignParentLeft="true" />
+
+    <EditText
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/usernameTextBox"
+        android:layout_centerVertical="true"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentEnd="true"
+        android:layout_toEndOf="@+id/submitButton"
+        android:layout_toRightOf="@+id/submitButton" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:text="Username"
+        android:id="@+id/textView2"
+        android:layout_centerVertical="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:textColor="#111111" />
 
 </RelativeLayout>

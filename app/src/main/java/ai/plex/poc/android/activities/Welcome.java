@@ -15,13 +15,18 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.ToggleButton;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedOutputStream;
@@ -35,6 +40,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.List;
 
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotContract;
@@ -60,6 +66,24 @@ public class Welcome extends AppCompatActivity {
 
         setCheckBoxesFromPreferences();
 
+        EditText usernameTextBox = (EditText) findViewById(R.id.usernameTextBox);
+        usernameTextBox.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).edit().putString("username", s.toString()).commit();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
+
         //Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
         startService(mServiceIntent);
@@ -72,6 +96,7 @@ public class Welcome extends AppCompatActivity {
         Switch gyroscopeSwitch = (Switch) findViewById(R.id.gyroscopeSwitch);
         Switch magnoSwitch = (Switch) findViewById(R.id.magneticSwitch);
         Switch rotationSwitch = (Switch) findViewById(R.id.rotationSwitch);
+        EditText usernameText = (EditText) findViewById(R.id.usernameTextBox);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         boolean isDriving = prefs.getBoolean("isDriving", false);
@@ -80,6 +105,7 @@ public class Welcome extends AppCompatActivity {
         boolean isTrackingGyroscope = prefs.getBoolean("isTrackingGyroscope", false);
         boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
         boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
+        String username = prefs.getString("username", "default_user");
 
         recordingToggle.setChecked(isRecording);
         drivingToggle.setChecked(isDriving);
@@ -87,6 +113,7 @@ public class Welcome extends AppCompatActivity {
         gyroscopeSwitch.setChecked(isTrackingGyroscope);
         magnoSwitch.setChecked(isTrackingMagnetic);
         rotationSwitch.setChecked(isTrackingRotation);
+        usernameText.setText(username);
     }
 
     public void onClicked(View view) {
@@ -127,10 +154,11 @@ public class Welcome extends AppCompatActivity {
                 break;
             case R.id.submitButton:
                 try {
-                        SubmitLinearAcceleration();
-                        SubmitGyroscope();
-                        SubmitMagnetic();
-                        SubmitRotation();
+                    String username = PreferenceManager.getDefaultSharedPreferences(this).getString("username", "default_user");
+                    SubmitLinearAcceleration(username);
+                    SubmitGyroscope(username);
+                    SubmitMagnetic(username);
+                    SubmitRotation(username);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 } finally {
@@ -167,7 +195,7 @@ public class Welcome extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void SubmitAcceleration() {
+    public void SubmitAcceleration(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Cursor cursor = null;
@@ -193,11 +221,20 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Y, y);
                 responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Z, z);
                 responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "jSardinha");
+                responseObject.put("userId", username);
 
                 data.add(responseObject);
             }
-            new PostDataTask().execute(data);
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i * (data.size()/10) <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+
+            }
             int count = db.delete(SnapShotContract.AccelerationEntry.TABLE_NAME, SnapShotContract.AccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
@@ -208,7 +245,7 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-    public void SubmitLinearAcceleration() {
+    public void SubmitLinearAcceleration(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
@@ -233,11 +270,21 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Y, y);
                 responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Z, z);
                 responseObject.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "jSardinha");
+                responseObject.put("userId", username);
 
                 data.add(responseObject);
             }
-            new PostDataTask().execute(data);
+
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i+10 <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+            }
+
             int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, SnapShotContract.LinearAccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
@@ -248,7 +295,7 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-    public void SubmitGyroscope() {
+    public void SubmitGyroscope(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
@@ -273,11 +320,19 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, y);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, z);
                 responseObject.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "jSardinha");
+                responseObject.put("userId", username);
 
                 data.add(responseObject);
             }
-            new PostDataTask().execute(data);
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i+10 <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+            }
             int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
@@ -288,7 +343,7 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-    public void SubmitMagnetic() {
+    public void SubmitMagnetic(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
@@ -313,10 +368,18 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Y, y);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_Z, z);
                 responseObject.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "jSardinha");
+                responseObject.put("userId", username);
                 data.add(responseObject);
             }
-            new PostDataTask().execute(data);
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i+10 <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+            }
             int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
@@ -327,7 +390,7 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-    public void SubmitRotation() {
+    public void SubmitRotation(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
@@ -355,11 +418,21 @@ public class Welcome extends AppCompatActivity {
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_COS, cos);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, accuracy);
                 responseObject.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", "jSardinha");
+                responseObject.put("userId", username);
 
                 data.add(responseObject);
             }
-            new PostDataTask().execute(data);
+
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i+10 <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+            }
+
             int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
@@ -370,8 +443,8 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
-    public class PostDataTask extends AsyncTask<ArrayList<JSONObject>, Void, Void> {
-        protected Void doInBackground(ArrayList<JSONObject>... events){
+    public class PostDataTask extends AsyncTask<List<JSONObject>, Void, Void> {
+        protected Void doInBackground(List<JSONObject>... events){
 
             ConnectivityManager connMgr = (ConnectivityManager)
                     getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -383,16 +456,16 @@ public class Welcome extends AppCompatActivity {
                  dataType = events[0].get(0).get("dataType").toString();
                 switch (dataType){
                     case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
-                        api_route = "androidLinearAcceleration";
+                        api_route = "androidLinearAccelerations";
                         break;
                     case SnapShotContract.GyroscopeEntry.TABLE_NAME:
-                        api_route = "androidGyroscope";
+                        api_route = "androidGyroscopes";
                         break;
                     case SnapShotContract.MagneticEntry.TABLE_NAME:
-                        api_route = "androidMagnetic";
+                        api_route = "androidMagnetics";
                         break;
                     case SnapShotContract.RotationEntry.TABLE_NAME:
-                        api_route = "androidRotation";
+                        api_route = "androidRotations";
                         break;
                 }
             } catch (Exception e){
@@ -400,18 +473,22 @@ public class Welcome extends AppCompatActivity {
             }
 
             if (networkInfo != null && networkInfo.isConnected()) {
-
-                for ( JSONObject dataPoint : events[0]){
+                    JSONObject requestData = new JSONObject();
+                    JSONArray dataPoints = new JSONArray(events[0]);
+                    try {
+                        requestData.put("entries", dataPoints);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
                     InputStream is = null;
                     // Only display the first 500 characters of the retrieved
                     // web page content.
-                    int len = 500;
 
                     try {
                         //Define the URL
                         URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ api_route);
 
-                        String message = dataPoint.toString();
+                        String message = requestData.toString();
 
                         //Open a connection
                         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -421,7 +498,6 @@ public class Welcome extends AppCompatActivity {
                         conn.setRequestMethod("POST");
                         conn.setDoInput(true);
                         conn.setDoOutput(true);
-
 
                         //Set header details
                         conn.setRequestProperty("Content-Type","application/json;charset=utf-8");
@@ -441,11 +517,7 @@ public class Welcome extends AppCompatActivity {
                         wr.flush();
 
                         int response = conn.getResponseCode();
-                        Log.d("Record Submitted", "The response is: " + response);
-                        is = conn.getInputStream();
-                        // Convert the InputStream into a string
-                        String contentAsString = readIt(is, len);
-                        //Log.d("DEBUG_TAG", "The response data is: " + contentAsString);
+                        Log.d("Records submitted", "The response is: " + response);
                     } catch (Exception e) {
                         e.printStackTrace();
                     } finally {
@@ -457,22 +529,12 @@ public class Welcome extends AppCompatActivity {
                             }
                         }
                     }
-                }
             } else {
                 // display error
+                Log.d("Network Connection", "WIFI is not connected, data can't be submitted");
             }
-
             return null;
         }
 
-    }
-
-    // Reads an InputStream and converts it to a String.
-    public String readIt(InputStream stream, int len) throws IOException, UnsupportedEncodingException {
-        Reader reader = null;
-        reader = new InputStreamReader(stream, "UTF-8");
-        char[] buffer = new char[len];
-        reader.read(buffer);
-        return new String(buffer);
     }
 }
