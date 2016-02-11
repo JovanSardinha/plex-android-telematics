@@ -90,11 +90,25 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 DataManagerEntry.COLUMN_LAST_ACCELERATION_RECORD + " INTEGER NOT NULL);";
 
         db.execSQL(SQL_CREATE_DATAMANAGER);
+
+        final String SQL_CREATE_LOCATION = "CREATE TABLE " + LocationEntry.TABLE_NAME+ "(" +
+                LocationEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                LocationEntry.COLUMN_TIMESTAMP + " INTEGER NOT NULL, " +
+                LocationEntry.COLUMN_LONGITUDE + " REAL NOT NULL, " +
+                LocationEntry.COLUMN_LATITUDE + " REAL NOT NULL, " +
+                LocationEntry.COLUMN_SPEED + " REAL NOT NULL, " +
+                LocationEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
+
+        db.execSQL(SQL_CREATE_LOCATION);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         db.execSQL("DROP TABLE IF EXITS "+ AccelerationEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXITS "+ RotationEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXITS "+ GyroscopeEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXITS "+ MagneticEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXITS "+ LocationEntry.TABLE_NAME);
         db.execSQL("DROP TABLE IF EXITS "+ DataManagerEntry.TABLE_NAME);
         onCreate(db);
     }
@@ -105,10 +119,12 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
             Integer count2 = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry._ID + ">=?", new String[]{String.valueOf(0)});
             Integer count3 = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry._ID + ">=?", new String[]{String.valueOf(0)});
             Integer count4 = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry._ID + ">=?", new String[]{String.valueOf(0)});
+            Integer count5 = db.delete(LocationEntry.TABLE_NAME, LocationEntry._ID + ">=?", new String[]{String.valueOf(0)});
             Log.d("Deleted from Acce ", String.valueOf(count1));
             Log.d("Deleted from Gyroscope ", String.valueOf(count2));
             Log.d("Deleted from Magnetic ", String.valueOf(count3));
             Log.d("Deleted from Rotation ", String.valueOf(count4));
+            Log.d("Deleted from Location ", String.valueOf(count5));
             return  true;
         } catch (Exception e) {
             e.printStackTrace();

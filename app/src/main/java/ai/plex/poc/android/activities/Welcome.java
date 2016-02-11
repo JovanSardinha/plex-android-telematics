@@ -96,6 +96,7 @@ public class Welcome extends AppCompatActivity {
         Switch gyroscopeSwitch = (Switch) findViewById(R.id.gyroscopeSwitch);
         Switch magnoSwitch = (Switch) findViewById(R.id.magneticSwitch);
         Switch rotationSwitch = (Switch) findViewById(R.id.rotationSwitch);
+        Switch locationSwitch = (Switch) findViewById(R.id.locationSwitch);
         EditText usernameText = (EditText) findViewById(R.id.usernameTextBox);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
@@ -105,6 +106,7 @@ public class Welcome extends AppCompatActivity {
         boolean isTrackingGyroscope = prefs.getBoolean("isTrackingGyroscope", false);
         boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
         boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
+        boolean isTrackingLocation = prefs.getBoolean("isTrackingLocation", false);
         String username = prefs.getString("username", "default_user");
 
         recordingToggle.setChecked(isRecording);
@@ -114,6 +116,7 @@ public class Welcome extends AppCompatActivity {
         magnoSwitch.setChecked(isTrackingMagnetic);
         rotationSwitch.setChecked(isTrackingRotation);
         usernameText.setText(username);
+        locationSwitch.setChecked(isTrackingLocation);
     }
 
     public void onClicked(View view) {
@@ -149,6 +152,11 @@ public class Welcome extends AppCompatActivity {
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingRotation", checked).commit();
                 restartMotionDataService();
                 break;
+            case R.id.locationSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingLocation", checked).commit();
+                restartMotionDataService();
+                break;
             case R.id.clearButton:
                 SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
                 break;
@@ -159,6 +167,7 @@ public class Welcome extends AppCompatActivity {
                     SubmitGyroscope(username);
                     SubmitMagnetic(username);
                     SubmitRotation(username);
+                    SubmitLocation(username);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 } finally {
@@ -443,6 +452,55 @@ public class Welcome extends AppCompatActivity {
         }
     }
 
+    public void SubmitLocation(String username) {
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Integer lastRecord = -1;
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery("Select * from " + SnapShotContract.LocationEntry.TABLE_NAME, null);
+            while (cursor.moveToNext()) {
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LocationEntry._ID));
+                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LATITUDE));
+                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LONGITUDE));
+                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_SPEED));
+                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP));
+                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING));
+
+                JSONObject responseObject = new JSONObject();
+                responseObject.put("deviceType", "Android");
+                responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
+                responseObject.put("dataType",SnapShotContract.LocationEntry.TABLE_NAME);
+                responseObject.put(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP, timestamp);
+                responseObject.put(SnapShotContract.LocationEntry.COLUMN_LATITUDE, x);
+                responseObject.put(SnapShotContract.LocationEntry.COLUMN_LONGITUDE, y);
+                responseObject.put(SnapShotContract.LocationEntry.COLUMN_SPEED, z);
+                responseObject.put(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING, isDriving);
+                responseObject.put("userId", username);
+
+                data.add(responseObject);
+            }
+
+            for ( int i = 0; i < data.size(); i = i+10){
+                if (i+10 <= data.size()) {
+                    List set = data.subList(i, i + 10);
+                    new PostDataTask().execute(set);
+                } else {
+                    List set = data.subList(i, data.size());
+                    new PostDataTask().execute(set);
+                }
+            }
+
+            int count = db.delete(SnapShotContract.LocationEntry.TABLE_NAME, SnapShotContract.LocationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            Log.d("DELETED RECORDS", String.valueOf(count));
+        } catch (Exception ex) {
+            Log.e("Write Excption", "Error writing data!");
+        } finally {
+            cursor.close();
+            db.close();
+        }
+    }
+
     public class PostDataTask extends AsyncTask<List<JSONObject>, Void, Void> {
         protected Void doInBackground(List<JSONObject>... events){
 
@@ -466,6 +524,9 @@ public class Welcome extends AppCompatActivity {
                         break;
                     case SnapShotContract.RotationEntry.TABLE_NAME:
                         api_route = "androidRotations";
+                        break;
+                    case SnapShotContract.LocationEntry.TABLE_NAME:
+                        api_route = "androidLocations";
                         break;
                 }
             } catch (Exception e){

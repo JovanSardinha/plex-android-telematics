@@ -27,7 +27,7 @@ public class LinearAccelerationMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        new SensorDataWriter(applicationContext,Sensor.TYPE_LINEAR_ACCELERATION).writeData(event);
+        new SensorDataWriter(applicationContext,Sensor.TYPE_LINEAR_ACCELERATION, false).writeData(event, null);
     }
 
     public void pause() {

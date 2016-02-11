@@ -27,7 +27,7 @@ public class MagneticMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        new SensorDataWriter(applicationContext,Sensor.TYPE_MAGNETIC_FIELD).writeData(event);
+        new SensorDataWriter(applicationContext,Sensor.TYPE_MAGNETIC_FIELD, false).writeData(event, null);
     }
 
     public void pause() {

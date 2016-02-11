@@ -55,9 +55,20 @@ public class SnapShotContract {
         public static final String COLUMN_IS_DRIVING = "isDriving";
     }
 
+    public static final class LocationEntry implements BaseColumns{
+        public static final String TABLE_NAME = "location";
+        public static final String COLUMN_TIMESTAMP = "timestamp";
+        public static final String COLUMN_LATITUDE = "latitude";
+        public static final String COLUMN_LONGITUDE = "longitude";
+        public static final String COLUMN_SPEED = "speed";
+        public static final String COLUMN_IS_DRIVING = "isDriving";
+    }
+
     public static final class DataManagerEntry implements BaseColumns{
         public static final String TABLE_NAME = "datamanager";
         public static final String COLUMN_TIMESTAMP = "timestamp";
         public static final String COLUMN_LAST_ACCELERATION_RECORD = "lastAccelerationRecord";
     }
+
+
 }

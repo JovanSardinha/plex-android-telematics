@@ -27,7 +27,7 @@ public class GyroscopeMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        new SensorDataWriter(applicationContext,Sensor.TYPE_GYROSCOPE).writeData(event);
+        new SensorDataWriter(applicationContext,Sensor.TYPE_GYROSCOPE, false).writeData(event, null);
     }
 
     public void pause() {

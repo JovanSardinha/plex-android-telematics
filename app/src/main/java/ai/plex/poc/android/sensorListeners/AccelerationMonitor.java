@@ -41,6 +41,7 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
 
 /**
  * Created by terek on 07/01/16.
+ * Not being used, linearAcceleration is used instead
  */
 public class AccelerationMonitor implements SensorEventListener {
     private Context applicationContext;
@@ -60,7 +61,7 @@ public class AccelerationMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        new SensorDataWriter(applicationContext,Sensor.TYPE_ACCELEROMETER).writeData(event);
+        new SensorDataWriter(applicationContext,Sensor.TYPE_ACCELEROMETER, false).writeData(event, null);
     }
 
     protected void pause() {
