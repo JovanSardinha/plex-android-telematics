@@ -1,8 +1,10 @@
 package ai.plex.poc.android.activities;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
@@ -13,6 +15,8 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -47,7 +51,11 @@ import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.services.MotionDataService;
 
-public class Welcome extends AppCompatActivity {
+public class Welcome extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
+
+    // Constant for requesting location permissions
+    final int requestLocationPermissionId = 123;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,7 +72,7 @@ public class Welcome extends AppCompatActivity {
             }
         });
 
-        setCheckBoxesFromPreferences();
+        loadPreferences();
 
         EditText usernameTextBox = (EditText) findViewById(R.id.usernameTextBox);
         usernameTextBox.addTextChangedListener(new TextWatcher() {
@@ -84,12 +92,35 @@ public class Welcome extends AppCompatActivity {
             }
         });
 
-        //Start the background service
+        // Request location permissions if not granted already
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.d("LOCATION", "Requesting Fine Location permissions.");
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    requestLocationPermissionId);
+        }
+
+        // Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
         startService(mServiceIntent);
     }
 
-    private void setCheckBoxesFromPreferences(){
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case requestLocationPermissionId: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.d("LOCATION", "Location permissions granted :)");
+                } else {
+                    Log.e("LOCATION", "Location permissions not granted :(");
+                }
+                return;
+            }
+        }
+    }
+
+    private void loadPreferences(){
         ToggleButton drivingToggle = (ToggleButton) findViewById(R.id.isDrivingToggleButton);
         ToggleButton recordingToggle = (ToggleButton) findViewById(R.id.isRecordingToggleButton);
         Switch accelerationSwitch = (Switch) findViewById(R.id.accelerationSwitch);

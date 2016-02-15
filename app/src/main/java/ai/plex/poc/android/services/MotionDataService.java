@@ -1,9 +1,11 @@
 package ai.plex.poc.android.services;
 
+import android.Manifest;
 import android.app.IntentService;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 
@@ -11,6 +13,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
 
@@ -33,7 +37,6 @@ import ai.plex.poc.android.sensorListeners.RotationMonitor;
  * Intent service used to obtain telematics data from the phone
  */
 public class MotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
-
     //Used to allow sensor data to recorded on a separate thread
     private static HandlerThread sensorHandlerThread;
     private static Handler sensorHandler;
@@ -57,7 +60,6 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     //Location API
     private static GoogleApiClient mGoogleApiClient;
     LocationRequest mLocationRequest;
-
 
     public MotionDataService() {
         super("MotionDataService");
@@ -97,8 +99,8 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     public void onCreate() {
         super.onCreate();
         mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(10000);
-        mLocationRequest.setFastestInterval(10000);
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(100);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         buildGoogleApiClient();
     }
@@ -207,20 +209,26 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         }
     }
 
+    private void startLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, locationMonitor);
+            Log.d("LOCATION", "Location update started ..............: ");
+        }
+    }
+
     @Override
     public void onConnected(Bundle bundle) {
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient,mLocationRequest, locationMonitor);
-        Log.d("LOCATION", "Location update started ..............: ");
+        startLocationUpdates();
     }
 
     @Override
     public void onConnectionSuspended(int i) {
-
+        Log.d("LOCATION", "googleApiClient connection suspended");
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
-
+        Log.d("LOCATION", "Failed to connect to googleApiClient");
     }
 }
 

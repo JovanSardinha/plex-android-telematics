@@ -13,11 +13,9 @@ import com.google.android.gms.location.LocationListener;
 public class LocationMonitor implements LocationListener {
     private Context applicationContext;
 
-
     public LocationMonitor(Context context){
         this.applicationContext = context;
     }
-
 
     @Override
     public void onLocationChanged(Location location) {
