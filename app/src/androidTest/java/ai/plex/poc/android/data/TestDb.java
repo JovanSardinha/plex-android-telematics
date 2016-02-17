@@ -33,16 +33,16 @@ public class TestDb extends AndroidTestCase {
 
         assertTrue("Database has not been created correctly", c.moveToFirst());
 
-        c = db.rawQuery("PRAGMA table_info(" + SnapShotContract.AccelerationEntry.TABLE_NAME+")", null);
+        c = db.rawQuery("PRAGMA table_info(" + SnapShotContract.LinearAccelerationEntry.TABLE_NAME+")", null);
 
         assertTrue("Unable to query the database for table information.", c.moveToFirst());
 
         final HashSet<String> accelerationColumnHashSet = new HashSet<String>();
-        accelerationColumnHashSet.add(SnapShotContract.AccelerationEntry._ID);
-        accelerationColumnHashSet.add(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP);
-        accelerationColumnHashSet.add(SnapShotContract.AccelerationEntry.COLUMN_X);
-        accelerationColumnHashSet.add(SnapShotContract.AccelerationEntry.COLUMN_Y);
-        accelerationColumnHashSet.add(SnapShotContract.AccelerationEntry.COLUMN_Z);
+        accelerationColumnHashSet.add(SnapShotContract.LinearAccelerationEntry._ID);
+        accelerationColumnHashSet.add(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP);
+        accelerationColumnHashSet.add(SnapShotContract.LinearAccelerationEntry.COLUMN_X);
+        accelerationColumnHashSet.add(SnapShotContract.LinearAccelerationEntry.COLUMN_Y);
+        accelerationColumnHashSet.add(SnapShotContract.LinearAccelerationEntry.COLUMN_Z);
 
         int columnNameIndex = c.getColumnIndex("name");
         do {

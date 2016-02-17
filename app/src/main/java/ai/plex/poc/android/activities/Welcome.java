@@ -129,6 +129,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         Switch rotationSwitch = (Switch) findViewById(R.id.rotationSwitch);
         Switch locationSwitch = (Switch) findViewById(R.id.locationSwitch);
         EditText usernameText = (EditText) findViewById(R.id.usernameTextBox);
+        Switch activityDetectionSwitch = (Switch) findViewById(R.id.activityDetectionSwitch);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         boolean isDriving = prefs.getBoolean("isDriving", false);
@@ -138,6 +139,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
         boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
         boolean isTrackingLocation = prefs.getBoolean("isTrackingLocation", false);
+        boolean isTrackingActivity = prefs.getBoolean("isTrackingActivity", false);
         String username = prefs.getString("username", "default_user");
 
         recordingToggle.setChecked(isRecording);
@@ -148,6 +150,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         rotationSwitch.setChecked(isTrackingRotation);
         usernameText.setText(username);
         locationSwitch.setChecked(isTrackingLocation);
+        activityDetectionSwitch.setChecked(isTrackingActivity);
     }
 
     public void onClicked(View view) {
@@ -188,6 +191,11 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingLocation", checked).commit();
                 restartMotionDataService();
                 break;
+            case R.id.activityDetectionSwitch:
+                checked = ((Switch) view).isChecked();
+                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingActivity", checked).commit();
+                restartMotionDataService();
+                break;
             case R.id.clearButton:
                 SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
                 break;
@@ -199,9 +207,9 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     SubmitMagnetic(username);
                     SubmitRotation(username);
                     SubmitLocation(username);
+                    //SubmitDetectedActivity(username);
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                } finally {
                 }
         }
     }
@@ -235,32 +243,28 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         return super.onOptionsItemSelected(item);
     }
 
-    public void SubmitAcceleration(String username) {
+    public void SubmitDetectedActivity(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Cursor cursor = null;
         Integer lastRecord = -1;
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.AccelerationEntry.TABLE_NAME, null);
+            cursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME, null);
 
             while (cursor.moveToNext()) {
-
-                Log.d("ACCELERATION", String.valueOf(cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X))));
-                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.AccelerationEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Y));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Z));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_IS_DRIVING));
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
+                int name = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
+                int confidence = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE));
+                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP));
+                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING));
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
                 responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
-                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP, timestamp);
-                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_X, x);
-                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Y, y);
-                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_Z, z);
-                responseObject.put(SnapShotContract.AccelerationEntry.COLUMN_IS_DRIVING, isDriving);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP, timestamp);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_NAME, name);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE, confidence);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING, isDriving);
                 responseObject.put("userId", username);
 
                 data.add(responseObject);
@@ -275,7 +279,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
 
             }
-            int count = db.delete(SnapShotContract.AccelerationEntry.TABLE_NAME, SnapShotContract.AccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -325,7 +329,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
             }
 
-            int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, SnapShotContract.LinearAccelerationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -373,7 +377,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     new PostDataTask().execute(set);
                 }
             }
-            int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -420,7 +424,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     new PostDataTask().execute(set);
                 }
             }
-            int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -473,7 +477,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
             }
 
-            int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -522,7 +526,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
             }
 
-            int count = db.delete(SnapShotContract.LocationEntry.TABLE_NAME, SnapShotContract.LocationEntry._ID + "<=?", new String[] { String.valueOf(lastRecord)});
+            int count = db.delete(SnapShotContract.LocationEntry.TABLE_NAME, null, null);
             Log.d("DELETED RECORDS", String.valueOf(count));
         } catch (Exception ex) {
             Log.e("Write Excption", "Error writing data!");
@@ -535,8 +539,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     public class PostDataTask extends AsyncTask<List<JSONObject>, Void, Void> {
         protected Void doInBackground(List<JSONObject>... events){
 
-            ConnectivityManager connMgr = (ConnectivityManager)
-                    getSystemService(Context.CONNECTIVITY_SERVICE);
+            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
 
             String dataType = "";
@@ -559,12 +562,15 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     case SnapShotContract.LocationEntry.TABLE_NAME:
                         api_route = "androidLocations";
                         break;
+                    case SnapShotContract.DetectedActivityEntry.TABLE_NAME:
+                        api_route = "androidDetectedActivities";
+                        break;
                 }
             } catch (Exception e){
                 e.printStackTrace();
             }
 
-            if (networkInfo != null && networkInfo.isConnected()) {
+            if (networkInfo != null && networkInfo.isConnected() && networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
                     JSONObject requestData = new JSONObject();
                     JSONArray dataPoints = new JSONArray(events[0]);
                     try {

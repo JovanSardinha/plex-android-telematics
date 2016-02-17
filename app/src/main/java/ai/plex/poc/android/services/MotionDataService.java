@@ -2,6 +2,7 @@ package ai.plex.poc.android.services;
 
 import android.Manifest;
 import android.app.IntentService;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -13,17 +14,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.preference.PreferenceManager;
-import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
-
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.PendingResult;
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.location.FusedLocationProviderApi;
-import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
@@ -37,6 +33,8 @@ import ai.plex.poc.android.sensorListeners.RotationMonitor;
  * Intent service used to obtain telematics data from the phone
  */
 public class MotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+    private static final String TAG = MotionDataService.class.getSimpleName();
+
     //Used to allow sensor data to recorded on a separate thread
     private static HandlerThread sensorHandlerThread;
     private static Handler sensorHandler;
@@ -49,7 +47,6 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     private static GyroscopeMonitor gyroscopeMonitor;
     private static MagneticMonitor magneticMonitor;
     private static RotationMonitor rotationMonitor;
-    private static LocationMonitor locationMonitor;
 
     //The sensors
     private static Sensor linearAccelerationSensor;
@@ -89,10 +86,6 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
             magneticSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
             magneticMonitor = new MagneticMonitor(this.getApplicationContext(), magneticSensor);
         }
-
-        if (locationMonitor == null){
-            locationMonitor = new LocationMonitor(this.getApplicationContext());
-        }
     }
 
     @Override
@@ -100,7 +93,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         super.onCreate();
         mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(1000);
-        mLocationRequest.setFastestInterval(100);
+        mLocationRequest.setFastestInterval(1000);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         buildGoogleApiClient();
     }
@@ -132,6 +125,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
+                .addApi(ActivityRecognition.API)
                 .build();
     }
 
@@ -183,6 +177,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
         boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
         boolean isTrackingLocation = prefs.getBoolean("isTrackingLocation", false);
+        boolean isTrackingActivity = prefs.getBoolean("isTrackingActivity", false);
 
         //Create a new thread
         if (sensorHandlerThread == null) {
@@ -204,31 +199,48 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         if (magneticSensor != null && isTrackingMagnetic && isRecording) {
             mSensorManager.registerListener(magneticMonitor, magneticSensor, SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
         }
-        if (mGoogleApiClient != null && isTrackingLocation && isRecording){
+        if (mGoogleApiClient != null && isRecording && (isTrackingLocation || isTrackingActivity)) {
             mGoogleApiClient.connect();
         }
     }
 
     private void startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, locationMonitor);
-            Log.d("LOCATION", "Location update started ..............: ");
+            Intent i = new Intent(this, LocationMonitorService.class);
+            PendingIntent mLocationMonitoringIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, mLocationMonitoringIntent);
+            Log.d(TAG, "Location update started.");
         }
+    }
+
+    private void startActivityDetection() {
+        Intent i = new Intent(this, ActivityRecognitionIntentService.class);
+        PendingIntent mActivityRecongPendingIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
+        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mGoogleApiClient, 1, mActivityRecongPendingIntent);
+        Log.d(TAG, "Activity detection started.");
     }
 
     @Override
     public void onConnected(Bundle bundle) {
-        startLocationUpdates();
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean isTrackingLocation = prefs.getBoolean("isTrackingLocation", false);
+        boolean isTrackingActivity = prefs.getBoolean("isTrackingActivity", false);
+        if (isTrackingLocation) {
+            startLocationUpdates();
+        }
+        if (isTrackingActivity) {
+            startActivityDetection();
+        }
     }
 
     @Override
     public void onConnectionSuspended(int i) {
-        Log.d("LOCATION", "googleApiClient connection suspended");
+        Log.d(TAG, "googleApiClient connection suspended");
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
-        Log.d("LOCATION", "Failed to connect to googleApiClient");
+        Log.d(TAG, "Failed to connect to googleApiClient");
     }
 }
 
