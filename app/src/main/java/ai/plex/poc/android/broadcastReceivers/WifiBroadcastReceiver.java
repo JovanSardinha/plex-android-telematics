@@ -34,77 +34,21 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
  * Created by terek on 08/01/16.
  */
 public class WifiBroadcastReceiver extends BroadcastReceiver {
-
+    private static final String TAG = WifiBroadcastReceiver.class.getSimpleName();
     private Context context;
 
     @Override
     public void onReceive(Context context, Intent intent) {
         this.context = context;
-        //Check wifi status
-        ConnectivityManager cm =
-                (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        // Check wifi status
+        ConnectivityManager cm = (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
 
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
 
-        //Check if WIFI is connected
+        // Check if WIFI is connected
         if (activeNetwork.getType() == ConnectivityManager.TYPE_WIFI){
-            //
-            Log.d("INFO", "onReceive: Connected to WIIF!");
-            //Check when the latest record was created
-            SQLiteDatabase db = new SnapShotDBHelper(context).getWritableDatabase();
+            Log.d(TAG, "Connected to WIFI!");
 
-
-
-
-            //Check if the table exists
-            long lastAccelerationRecord = 0;
-            Cursor cursor = db.rawQuery("select DISTINCT tbl_name from sqlite_master where tbl_name = '"+SnapShotContract.DataManagerEntry.TABLE_NAME+"'", null);
-            if (cursor.moveToFirst()!=false){
-                cursor = db.rawQuery("SELECT Max(" + SnapShotContract.DataManagerEntry.COLUMN_TIMESTAMP + ") FROM " + SnapShotContract.DataManagerEntry.TABLE_NAME + " LIMIT 1", null);
-                if (cursor.moveToFirst()!= false){
-                    lastAccelerationRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DataManagerEntry.COLUMN_LAST_ACCELERATION_RECORD));
-                }
-            }
-
-            //Cursor cursor = db.query(SnapShotContract.DataManagerEntry.TABLE_NAME, null, SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP + "= ?", new String[]{String.valueOf(timestamp)}, null, null, null);
-
-            Log.d("Max Timestamp", String.valueOf(lastAccelerationRecord));
-
-            cursor = db.query(SnapShotContract.AccelerationEntry.TABLE_NAME,null, SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP + "> ?", new String[]{String.valueOf(lastAccelerationRecord)}, null, null, null);
-
-            try {
-                while (cursor.moveToNext()) {
-
-                    Log.d("ACCELERATION", String.valueOf(cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X))));
-                    float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_X));
-                    float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Y));
-                    float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_Z));
-                    lastAccelerationRecord = cursor.getLong(cursor.getColumnIndex(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP));
-
-                    JSONObject responseObject = new JSONObject();
-                    responseObject.put("deviceType", "Android");
-                    responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
-                    responseObject.put("timestamp", lastAccelerationRecord);
-                    responseObject.put("x", x);
-                    responseObject.put("y", y);
-                    responseObject.put("z", z);
-                    responseObject.put("userId", "tjudi");
-
-                    new PostDataTask().execute(responseObject.toString());
-
-                    ContentValues values = new ContentValues();
-                    values.put(SnapShotContract.DataManagerEntry.COLUMN_LAST_ACCELERATION_RECORD, lastAccelerationRecord);
-                    values.put(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                    long rowId = db.insert(SnapShotContract.DataManagerEntry.TABLE_NAME,null,values);
-                }
-            } catch (Exception ex) {
-
-            }
-
-            ContentValues values = new ContentValues();
-            values.put(SnapShotContract.DataManagerEntry.COLUMN_LAST_ACCELERATION_RECORD, lastAccelerationRecord);
-            values.put(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-            long rowId = db.insert(SnapShotContract.DataManagerEntry.TABLE_NAME,null,values);
         }
     }
 

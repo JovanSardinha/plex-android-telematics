@@ -8,20 +8,20 @@ import android.util.Log;
 import com.google.android.gms.location.LocationListener;
 
 /**
- * Created by terek on 10/02/16.
+ * DEPRECATED
+ * USE LocationMonitorService instead.
+ *
  */
 public class LocationMonitor implements LocationListener {
     private Context applicationContext;
-
 
     public LocationMonitor(Context context){
         this.applicationContext = context;
     }
 
-
     @Override
     public void onLocationChanged(Location location) {
-        new SensorDataWriter(applicationContext,-1, true).writeData(null, location);
+        new SensorDataWriter(applicationContext, SensorType.LOCATION).writeData(location);
         Log.i("LOCATION", "New Location at: " + location.getLatitude() + "/" + location.getLongitude() + " at " + location.getSpeed());
     }
 }

@@ -9,6 +9,9 @@ import android.hardware.SensorEvent;
 import android.location.Location;
 import android.preference.PreferenceManager;
 import android.util.Log;
+
+import com.google.android.gms.location.DetectedActivity;
+
 import java.util.Date;
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
@@ -19,19 +22,26 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
 public class SensorDataWriter {
     private Context context;
     private SQLiteDatabase db;
-    private int sensorType;
-    private boolean isLocationSensor;
+    private SensorType sensorType;
 
-    public SensorDataWriter(Context context, int sensorType, boolean isLocationSensor){
+    public SensorDataWriter(Context context, SensorType sensorType){
         this.context = context;
         this.sensorType = sensorType;
-        this.isLocationSensor = isLocationSensor;
     }
 
-    protected Void writeData(SensorEvent event, Location location) {
-        // The light sensor returns a single value.
-        // Many sensors return 3 values, one for each axis.
-        //Check if the person is currently driving
+    public void writeData(SensorEvent event) {
+        writeData(event, null, null);
+    }
+
+    public void writeData(Location location) {
+        writeData(null, location, null);
+    }
+
+    public void writeData(DetectedActivity activity) {
+        writeData(null, null, activity);
+    }
+
+    private void writeData(SensorEvent event, Location location, DetectedActivity activity) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         boolean isRecording = prefs.getBoolean("isRecording", false);
         boolean isDriving = prefs.getBoolean("isDriving", false);
@@ -41,66 +51,62 @@ public class SensorDataWriter {
                     this.db = SnapShotDBHelper.getsInstance(context).getWritableDatabase();
                     ContentValues values = new ContentValues();
                     long rowId = -1;
-
-                    if (isLocationSensor){
-                        values.put(SnapShotContract.LocationEntry.COLUMN_LATITUDE, location.getLatitude());
-                        values.put(SnapShotContract.LocationEntry.COLUMN_LONGITUDE, location.getLongitude());
-                        values.put(SnapShotContract.LocationEntry.COLUMN_SPEED, location.getSpeed());
-                        values.put(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                        values.put(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                        rowId = db.insert(SnapShotContract.LocationEntry.TABLE_NAME, null, values);
-                    } else {
-                        switch (this.sensorType) {
-                            case Sensor.TYPE_ACCELEROMETER:
-                                values.put(SnapShotContract.AccelerationEntry.COLUMN_X, event.values[0]);
-                                values.put(SnapShotContract.AccelerationEntry.COLUMN_Y, event.values[1]);
-                                values.put(SnapShotContract.AccelerationEntry.COLUMN_Z, event.values[2]);
-                                values.put(SnapShotContract.AccelerationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                                values.put(SnapShotContract.AccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                                rowId = db.insert(SnapShotContract.AccelerationEntry.TABLE_NAME, null, values);
-                                break;
-                            case Sensor.TYPE_GYROSCOPE:
-                                values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, event.values[0]);
-                                values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y, event.values[1]);
-                                values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z, event.values[2]);
-                                values.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                                values.put(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                                rowId = db.insert(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, values);
-                                break;
-                            case Sensor.TYPE_LINEAR_ACCELERATION:
-                                values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_X, event.values[0]);
-                                values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Y, event.values[1]);
-                                values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Z, event.values[2]);
-                                values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                                values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                                rowId = db.insert(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, values);
-                                break;
-                            case Sensor.TYPE_MAGNETIC_FIELD:
-                                values.put(SnapShotContract.MagneticEntry.COLUMN_X, event.values[0]);
-                                values.put(SnapShotContract.MagneticEntry.COLUMN_Y, event.values[1]);
-                                values.put(SnapShotContract.MagneticEntry.COLUMN_Z, event.values[2]);
-                                values.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                                values.put(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                                rowId = db.insert(SnapShotContract.MagneticEntry.TABLE_NAME, null, values);
-                                break;
-                            case Sensor.TYPE_ROTATION_VECTOR:
-                                values.put(SnapShotContract.RotationEntry.COLUMN_X_SIN, event.values[0]);
-                                values.put(SnapShotContract.RotationEntry.COLUMN_Y_SIN, event.values[1]);
-                                values.put(SnapShotContract.RotationEntry.COLUMN_Z_SIN, event.values[2]);
-                                values.put(SnapShotContract.RotationEntry.COLUMN_COS, event.values[3]);
-                                values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, event.values[4]);
-                                values.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
-                                values.put(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP, new Date().getTime());
-                                rowId = db.insert(SnapShotContract.RotationEntry.TABLE_NAME, null, values);
-                                break;
-                        }
+                    switch (this.sensorType) {
+                        case LINEAR_ACCELERATION:
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_X, event.values[0]);
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Y, event.values[1]);
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Z, event.values[2]);
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            rowId = db.insert(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, values);
+                            break;
+                        case GYROSCOPE:
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X, event.values[0]);
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y, event.values[1]);
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z, event.values[2]);
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            rowId = db.insert(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, values);
+                            break;
+                        case MAGNETIC:
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_X, event.values[0]);
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_Y, event.values[1]);
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_Z, event.values[2]);
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            rowId = db.insert(SnapShotContract.MagneticEntry.TABLE_NAME, null, values);
+                            break;
+                        case ROTATION:
+                            values.put(SnapShotContract.RotationEntry.COLUMN_X_SIN, event.values[0]);
+                            values.put(SnapShotContract.RotationEntry.COLUMN_Y_SIN, event.values[1]);
+                            values.put(SnapShotContract.RotationEntry.COLUMN_Z_SIN, event.values[2]);
+                            values.put(SnapShotContract.RotationEntry.COLUMN_COS, event.values[3]);
+                            values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, event.values[4]);
+                            values.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            rowId = db.insert(SnapShotContract.RotationEntry.TABLE_NAME, null, values);
+                            break;
+                        case LOCATION:
+                            values.put(SnapShotContract.LocationEntry.COLUMN_LATITUDE, location.getLatitude());
+                            values.put(SnapShotContract.LocationEntry.COLUMN_LONGITUDE, location.getLongitude());
+                            values.put(SnapShotContract.LocationEntry.COLUMN_SPEED, location.getSpeed());
+                            values.put(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            rowId = db.insert(SnapShotContract.LocationEntry.TABLE_NAME, null, values);
+                            break;
+                        case ACTIVITY_DETECTOR:
+                            values.put(SnapShotContract.DetectedActivityEntry.COLUMN_NAME, String.valueOf(activity.getType()));
+                            values.put(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE, String.valueOf(activity.getConfidence()));
+                            values.put(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            rowId = db.insert(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, values);
+                            break;
                     }
-                    Log.d(this.sensorType + " Record Written", String.valueOf(rowId));
+
+                    Log.d(this.sensorType.toString() + " records written", String.valueOf(rowId));
             } catch (Exception ex){
                 ex.printStackTrace();
-            } finally {
             }
         }
-        return null;
-        }
+    }
 }

@@ -27,7 +27,7 @@ public class RotationMonitor implements SensorEventListener {
 
     @Override
     public final void onSensorChanged(SensorEvent event) {
-        new SensorDataWriter(applicationContext,Sensor.TYPE_ROTATION_VECTOR, false).writeData(event, null);
+        new SensorDataWriter(applicationContext, SensorType.ROTATION).writeData(event);
     }
 
     public void pause() {

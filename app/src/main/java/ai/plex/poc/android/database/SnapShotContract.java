@@ -7,16 +7,6 @@ import android.provider.BaseColumns;
  * Created by terek on 07/01/16.
  */
 public class SnapShotContract {
-
-    public static final class AccelerationEntry implements BaseColumns{
-        public static final String TABLE_NAME = "acceleration";
-        public static final String COLUMN_TIMESTAMP = "timestamp";
-        public static final String COLUMN_X = "x";
-        public static final String COLUMN_Y = "y";
-        public static final String COLUMN_Z = "z";
-        public static final String COLUMN_IS_DRIVING = "isDriving";
-    }
-
     public static final class LinearAccelerationEntry implements BaseColumns{
         public static final String TABLE_NAME = "linearAcceleration";
         public static final String COLUMN_TIMESTAMP = "timestamp";
@@ -64,11 +54,11 @@ public class SnapShotContract {
         public static final String COLUMN_IS_DRIVING = "isDriving";
     }
 
-    public static final class DataManagerEntry implements BaseColumns{
-        public static final String TABLE_NAME = "datamanager";
+    public static final class DetectedActivityEntry implements BaseColumns{
+        public static final String TABLE_NAME = "detectedActivity";
         public static final String COLUMN_TIMESTAMP = "timestamp";
-        public static final String COLUMN_LAST_ACCELERATION_RECORD = "lastAccelerationRecord";
+        public static final String COLUMN_NAME = "name";
+        public static final String COLUMN_CONFIDENCDE = "confidence";
+        public static final String COLUMN_IS_DRIVING = "isDriving";
     }
-
-
 }
