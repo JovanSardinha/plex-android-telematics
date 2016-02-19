@@ -87,7 +87,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 DetectedActivityEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 DetectedActivityEntry.COLUMN_TIMESTAMP + " INTEGER NOT NULL, " +
                 DetectedActivityEntry.COLUMN_NAME + " INTEGER NOT NULL, " +
-                DetectedActivityEntry.COLUMN_CONFIDENCDE + " INTEGER NOT NULL"+
+                DetectedActivityEntry.COLUMN_CONFIDENCDE + " INTEGER NOT NULL, "+
                 DetectedActivityEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_DETECTED_ACTIVITY);
