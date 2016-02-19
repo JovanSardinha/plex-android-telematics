@@ -57,8 +57,8 @@ public class SnapShotContract {
     public static final class DetectedActivityEntry implements BaseColumns{
         public static final String TABLE_NAME = "detectedActivity";
         public static final String COLUMN_TIMESTAMP = "timestamp";
-        public static final String COLUMN_NAME = "name";
-        public static final String COLUMN_CONFIDENCDE = "confidence";
+        public static final String COLUMN_NAME = "activityName";
+        public static final String COLUMN_CONFIDENCDE = "activityConfidence";
         public static final String COLUMN_IS_DRIVING = "isDriving";
     }
 }

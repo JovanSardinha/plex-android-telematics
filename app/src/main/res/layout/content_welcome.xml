@@ -127,8 +127,19 @@
         android:layout_below="@+id/magneticSwitch"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentEnd="true" />
+        android:layout_alignRight="@+id/magneticSwitch"
+        android:layout_alignEnd="@+id/magneticSwitch" />
+
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Activity Detection"
+        android:id="@+id/activityDetectionSwitch"
+        android:checked="false"
+        android:onClick="onClicked"
+        android:layout_below="@+id/locationSwitch"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 
     <Button
         android:layout_width="400px"
@@ -167,17 +178,4 @@
         android:textAlignment="inherit"
         android:textStyle="bold"
         android:textSize="22dp" />
-
-    <Switch
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Activity Detection"
-        android:id="@+id/activityDetectionSwitch"
-        android:layout_centerVertical="true"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/isDrivingToggleButton"
-        android:layout_alignEnd="@+id/isDrivingToggleButton"
-        android:checked="false" />
-
 </RelativeLayout>

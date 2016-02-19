@@ -1,8 +1,10 @@
 package ai.plex.poc.android.activities;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -12,6 +14,7 @@ import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -49,12 +52,17 @@ import java.util.List;
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
+import ai.plex.poc.android.sensorListeners.SensorType;
 import ai.plex.poc.android.services.MotionDataService;
 
 public class Welcome extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
+    private final static String TAG = Welcome.class.getSimpleName();
 
     // Constant for requesting location permissions
     final int requestLocationPermissionId = 123;
+
+    MotionDataService mService;
+    boolean mBound = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,9 +80,12 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             }
         });
 
-        loadPreferences();
-
         EditText usernameTextBox = (EditText) findViewById(R.id.usernameTextBox);
+        String username = PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).getString("username", null);
+        if (username != null) {
+            usernameTextBox.setText(username);
+        }
+
         usernameTextBox.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -99,11 +110,35 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
                     requestLocationPermissionId);
         }
+    }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
         // Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
         startService(mServiceIntent);
+
+        bindService(mServiceIntent, mConnection, Context.BIND_AUTO_CREATE);
     }
+
+    /** Defines callbacks for service binding, passed to bindService() */
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName className, IBinder service) {
+            // We've bound to MotionDataService, cast the IBinder and get MotionDataService instance
+            MotionDataService.MotionDataBinder binder = (MotionDataService.MotionDataBinder) service;
+            mService = binder.getService();
+            mBound = true;
+            Log.d(TAG, "Bound to MotionDataService.");
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName arg0) {
+            mBound = false;
+            Log.d(TAG, "Unbound from MotionDataService.");
+        }
+    };
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
@@ -120,40 +155,28 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         }
     }
 
-    private void loadPreferences(){
-        ToggleButton drivingToggle = (ToggleButton) findViewById(R.id.isDrivingToggleButton);
-        ToggleButton recordingToggle = (ToggleButton) findViewById(R.id.isRecordingToggleButton);
+    private void toggleSwitches(boolean on) {
         Switch accelerationSwitch = (Switch) findViewById(R.id.accelerationSwitch);
         Switch gyroscopeSwitch = (Switch) findViewById(R.id.gyroscopeSwitch);
-        Switch magnoSwitch = (Switch) findViewById(R.id.magneticSwitch);
+        Switch magneticSwitch = (Switch) findViewById(R.id.magneticSwitch);
         Switch rotationSwitch = (Switch) findViewById(R.id.rotationSwitch);
         Switch locationSwitch = (Switch) findViewById(R.id.locationSwitch);
-        EditText usernameText = (EditText) findViewById(R.id.usernameTextBox);
         Switch activityDetectionSwitch = (Switch) findViewById(R.id.activityDetectionSwitch);
 
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        boolean isDriving = prefs.getBoolean("isDriving", false);
-        boolean isRecording = prefs.getBoolean("isRecording", false);
-        boolean isTrackingAcceleration = prefs.getBoolean("isTrackingAcceleration", false);
-        boolean isTrackingGyroscope = prefs.getBoolean("isTrackingGyroscope", false);
-        boolean isTrackingMagnetic = prefs.getBoolean("isTrackingMagnetic", false);
-        boolean isTrackingRotation = prefs.getBoolean("isTrackingRotation", false);
-        boolean isTrackingLocation = prefs.getBoolean("isTrackingLocation", false);
-        boolean isTrackingActivity = prefs.getBoolean("isTrackingActivity", false);
-        String username = prefs.getString("username", "default_user");
-
-        recordingToggle.setChecked(isRecording);
-        drivingToggle.setChecked(isDriving);
-        accelerationSwitch.setChecked(isTrackingAcceleration);
-        gyroscopeSwitch.setChecked(isTrackingGyroscope);
-        magnoSwitch.setChecked(isTrackingMagnetic);
-        rotationSwitch.setChecked(isTrackingRotation);
-        usernameText.setText(username);
-        locationSwitch.setChecked(isTrackingLocation);
-        activityDetectionSwitch.setChecked(isTrackingActivity);
+        accelerationSwitch.setChecked(on);
+        gyroscopeSwitch.setChecked(on);
+        magneticSwitch.setChecked(on);
+        rotationSwitch.setChecked(on);
+        locationSwitch.setChecked(on);
+        activityDetectionSwitch.setChecked(on);
     }
 
     public void onClicked(View view) {
+        if (!mBound) {
+            Log.d(TAG, "MotionDataService not bound. Bind service to start updates.");
+            return;
+        }
+
         boolean checked = false;
         // Check which checkbox was clicked
         switch(view.getId()) {
@@ -164,64 +187,94 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             case R.id.isRecordingToggleButton:
                 checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", checked).commit();
-                restartMotionDataService();
+                toggleSwitches(checked);
+                if (checked) {
+                    mService.startAllSensors();
+                } else {
+                    mService.stopAllSensors();
+                }
                 break;
             case R.id.accelerationSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingAcceleration", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.LINEAR_ACCELERATION);
+                } else {
+                    mService.stopSensor(SensorType.LINEAR_ACCELERATION);
+                }
                 break;
             case R.id.gyroscopeSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingGyroscope", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.GYROSCOPE);
+                } else {
+                    mService.stopSensor(SensorType.GYROSCOPE);
+                }
                 break;
             case R.id.magneticSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingMagnetic", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.MAGNETIC);
+                } else {
+                    mService.stopSensor(SensorType.MAGNETIC);
+                }
                 break;
             case R.id.rotationSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingRotation", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.ROTATION);
+                } else {
+                    mService.stopSensor(SensorType.ROTATION);
+                }
                 break;
             case R.id.locationSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingLocation", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.LOCATION);
+                } else {
+                    mService.stopSensor(SensorType.LOCATION);
+                }
                 break;
             case R.id.activityDetectionSwitch:
                 checked = ((Switch) view).isChecked();
-                PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isTrackingActivity", checked).commit();
-                restartMotionDataService();
+                if (checked) {
+                    mService.startSensor(SensorType.ACTIVITY_DETECTOR);
+                } else {
+                    mService.stopSensor(SensorType.ACTIVITY_DETECTOR);
+                }
                 break;
             case R.id.clearButton:
                 SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
                 break;
             case R.id.submitButton:
                 try {
+                    mService.stopAllSensors();
+                    stopRecording();
+
                     String username = PreferenceManager.getDefaultSharedPreferences(this).getString("username", "default_user");
                     SubmitLinearAcceleration(username);
                     SubmitGyroscope(username);
                     SubmitMagnetic(username);
                     SubmitRotation(username);
                     SubmitLocation(username);
-                    //SubmitDetectedActivity(username);
+                    SubmitDetectedActivity(username);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
         }
     }
 
+    private void stopRecording() {
 
-    private void restartMotionDataService() {
-        //Restart Service
-        Intent mServiceIntent = new Intent(this, MotionDataService.class);
-        mServiceIntent.putExtra("Restart", true);
-        startService(mServiceIntent);
+        ToggleButton drivingToggle = (ToggleButton) findViewById(R.id.isDrivingToggleButton);
+        ToggleButton recordingToggle = (ToggleButton) findViewById(R.id.isRecordingToggleButton);
+        drivingToggle.setChecked(false);
+        recordingToggle.setChecked(false);
+
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", false).commit();
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", false).commit();
+
+        toggleSwitches(false);
     }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -241,52 +294,6 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    public void SubmitDetectedActivity(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
-        ArrayList<JSONObject> data = new ArrayList();
-        Cursor cursor = null;
-        Integer lastRecord = -1;
-        try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME, null);
-
-            while (cursor.moveToNext()) {
-                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
-                int name = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
-                int confidence = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING));
-
-                JSONObject responseObject = new JSONObject();
-                responseObject.put("deviceType", "Android");
-                responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
-                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP, timestamp);
-                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_NAME, name);
-                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE, confidence);
-                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING, isDriving);
-                responseObject.put("userId", username);
-
-                data.add(responseObject);
-            }
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i * (data.size()/10) <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
-
-            }
-            int count = db.delete(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
-        } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
-        } finally {
-            cursor.close();
-            db.close();
-        }
     }
 
     public void SubmitLinearAcceleration(String username) {
@@ -319,20 +326,21 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i+10 <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
             }
 
             int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " linear acceleration records.");
         } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
+            Log.e(TAG, "Error submitting lienar acceleration data to API.");
+            ex.printStackTrace();
         } finally {
             cursor.close();
             db.close();
@@ -368,19 +376,21 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
                 data.add(responseObject);
             }
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i+10 <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
+
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
             }
             int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " gyroscope records.");
         } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
+            Log.e(TAG, "Error submitting gyroscope data to API.");
+            ex.printStackTrace();
         } finally {
             cursor.close();
             db.close();
@@ -415,19 +425,21 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 responseObject.put("userId", username);
                 data.add(responseObject);
             }
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i+10 <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
+
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
             }
             int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " magnetic records.");
         } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
+            Log.e(TAG, "Error submitting magnetic data to API.");
+            ex.printStackTrace();
         } finally {
             cursor.close();
             db.close();
@@ -467,20 +479,21 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i+10 <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
             }
 
             int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " rotation records.");
         } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
+            Log.e(TAG, "Error submitting rotation data to API.");
+            ex.printStackTrace();
         } finally {
             cursor.close();
             db.close();
@@ -516,20 +529,70 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
-            for ( int i = 0; i < data.size(); i = i+10){
-                if (i+10 <= data.size()) {
-                    List set = data.subList(i, i + 10);
-                    new PostDataTask().execute(set);
-                } else {
-                    List set = data.subList(i, data.size());
-                    new PostDataTask().execute(set);
-                }
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
             }
 
             int count = db.delete(SnapShotContract.LocationEntry.TABLE_NAME, null, null);
-            Log.d("DELETED RECORDS", String.valueOf(count));
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " location records.");
         } catch (Exception ex) {
-            Log.e("Write Excption", "Error writing data!");
+            Log.e(TAG, "Error submitting location data to API.");
+            ex.printStackTrace();
+        } finally {
+            cursor.close();
+            db.close();
+        }
+    }
+
+
+    public void SubmitDetectedActivity(String username) {
+        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+        ArrayList<JSONObject> data = new ArrayList();
+        Cursor cursor = null;
+        Integer lastRecord = -1;
+        try {
+            cursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME, null);
+
+            while (cursor.moveToNext()) {
+                lastRecord = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
+                int name = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
+                int confidence = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE));
+                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP));
+                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING));
+
+                JSONObject responseObject = new JSONObject();
+                responseObject.put("deviceType", "Android");
+                responseObject.put("deviceOsVersion", Build.VERSION.RELEASE);
+                responseObject.put("dataType",SnapShotContract.DetectedActivityEntry.TABLE_NAME);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP, timestamp);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_NAME, name);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE, confidence);
+                responseObject.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING, isDriving);
+                responseObject.put("userId", username);
+
+                data.add(responseObject);
+            }
+
+            int page_size = 10;
+            int num_pages = (data.size()/page_size) + 1;
+            for (int page = 0; page < num_pages; page++){
+                int start = page * page_size;
+                int end = start + page_size;
+                end = end > data.size() ? data.size() : end;
+                List set = data.subList(start, end);
+                new PostDataTask().execute(set);
+            }
+            int count = db.delete(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, null);
+            Log.d(TAG, "Deleted " + String.valueOf(count) + " activity detection records.");
+        } catch (Exception ex) {
+            Log.e(TAG, "Error submitting activity data to API.");
+            ex.printStackTrace();
         } finally {
             cursor.close();
             db.close();
@@ -545,7 +608,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             String dataType = "";
             String api_route = "";
             try {
-                 dataType = events[0].get(0).get("dataType").toString();
+                dataType = events[0].get(0).get("dataType").toString();
                 switch (dataType){
                     case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
                         api_route = "androidLinearAccelerations";
@@ -563,7 +626,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                         api_route = "androidLocations";
                         break;
                     case SnapShotContract.DetectedActivityEntry.TABLE_NAME:
-                        api_route = "androidDetectedActivities";
+                        api_route = "androidActivities";
                         break;
                 }
             } catch (Exception e){
@@ -629,7 +692,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     }
             } else {
                 // display error
-                Log.d("Network Connection", "WIFI is not connected, data can't be submitted");
+                Log.d(TAG, "WIFI is not connected, data can't be submitted");
             }
             return null;
         }
