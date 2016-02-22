@@ -14,4 +14,14 @@ public final class Constants {
     public static final String EXTENDED_DATA_STATUS =
             "ai.plex.poc.android.ALIVE";
 
+    public static final String ACTIVITY_UPDATE_BROADCAST_ACTION =
+            "ai.plex.poc.android.ACTIVITY_UPDATE_BROADCAST_ACTION";
+
+    // Extra's for activity update broadcast Intent
+    public static final String ACTIVITY_NAME =
+            "ai.plex.poc.android.ACTIVITY_NAME";
+
+    public static final String ACTIVITY_CONFIDENCE =
+            "ai.plex.poc.android.ACTIVITY_CONFIDENCE";
+
 }

@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 
+import android.location.Location;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,12 +18,16 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.ActivityRecognitionResult;
+import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 
 import ai.plex.poc.android.sensorListeners.GyroscopeMonitor;
@@ -30,6 +35,7 @@ import ai.plex.poc.android.sensorListeners.LinearAccelerationMonitor;
 import ai.plex.poc.android.sensorListeners.LocationMonitor;
 import ai.plex.poc.android.sensorListeners.MagneticMonitor;
 import ai.plex.poc.android.sensorListeners.RotationMonitor;
+import ai.plex.poc.android.sensorListeners.SensorDataWriter;
 import ai.plex.poc.android.sensorListeners.SensorType;
 
 /**
@@ -224,15 +230,66 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
 
     /**
      *
-     * @param workIntent
+     * @param intent
      */
     @Override
-    protected void onHandleIntent(Intent workIntent) {
+    protected void onHandleIntent(Intent intent) {
         try {
-            stopAllSensors();
+            if (intent.hasExtra("ai.plex.poc.android.startService")) {
+                stopAllSensors();
+            } else if (ActivityRecognitionResult.hasResult(intent)) {
+                ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
+                DetectedActivity detectedActivity = result.getMostProbableActivity();
+
+                int confidence = detectedActivity.getConfidence();
+                String mostProbableName = getActivityName(detectedActivity.getType());
+
+                new SensorDataWriter(this, SensorType.ACTIVITY_DETECTOR).writeData(detectedActivity);
+                Log.d(TAG, "Detected activity: " + mostProbableName + "(w confidence " + confidence + ")");
+
+                Intent localIntent =
+                        new Intent(Constants.ACTIVITY_UPDATE_BROADCAST_ACTION)
+                                // Puts the status into the Intent
+                                .putExtra(Constants.ACTIVITY_NAME, mostProbableName)
+                                .putExtra(Constants.ACTIVITY_CONFIDENCE, confidence);
+
+                // Broadcasts the Intent to receivers in this app.
+                LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
+
+            } else if (LocationResult.hasResult(intent)) {
+                Location location = LocationResult.extractResult(intent).getLastLocation();
+                new SensorDataWriter(this, SensorType.LOCATION).writeData(location);
+                Log.i(TAG, "New Location at: " + location.getLatitude() + "/" + location.getLongitude() + " at " + location.getSpeed());
+            } else {
+                Log.d(TAG, "Intent had no data returned");
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private String getActivityName(int type) {
+        switch (type)
+        {
+            case DetectedActivity.IN_VEHICLE:
+                return "In Vehicle";
+            case DetectedActivity.ON_BICYCLE:
+                return "On Bicycle";
+            case DetectedActivity.ON_FOOT:
+                return "On Foot";
+            case DetectedActivity.WALKING:
+                return "Walking";
+            case DetectedActivity.STILL:
+                return "Still";
+            case DetectedActivity.TILTING:
+                return "Tilting";
+            case DetectedActivity.RUNNING:
+                return "Running";
+            case DetectedActivity.UNKNOWN:
+                return "Unknown";
+        }
+        return "N/A";
     }
 
     @Override
@@ -253,7 +310,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     private void startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             if (mLocationMonitoringIntent == null) {
-                Intent i = new Intent(this, LocationMonitorService.class);
+                Intent i = new Intent(this, MotionDataService.class);
                 mLocationMonitoringIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
             }
 
@@ -273,7 +330,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
 
     private void startActivityDetection() {
         if (mActivityRecognitionPendingIntent == null) {
-            Intent i = new Intent(this, ActivityRecognitionIntentService.class);
+            Intent i = new Intent(this, MotionDataService.class);
             mActivityRecognitionPendingIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
         }
 

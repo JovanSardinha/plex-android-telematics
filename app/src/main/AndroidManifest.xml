@@ -32,7 +32,5 @@
         <service
             android:name=".services.MotionDataService"
             android:exported="false"/>
-        <service android:name=".services.ActivityRecognitionIntentService"/>
-        <service android:name=".services.LocationMonitorService"/>
     </application>
 </manifest>
