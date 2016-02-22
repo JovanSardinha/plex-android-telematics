@@ -42,7 +42,7 @@ import ai.plex.poc.android.sensorListeners.SensorType;
  * Intent service used to obtain telematics data from the phone
  */
 public class MotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
-    private static int instanceCount = 0;
+    private static boolean isRunning = false;
 
     private static final String TAG = MotionDataService.class.getSimpleName();
 
@@ -87,8 +87,10 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
 
     public MotionDataService() {
         super("MotionDataService");
-        instanceCount++;
-        Log.d(TAG, " instance count: " + instanceCount);
+    }
+
+    public static boolean isRunning() {
+        return isRunning;
     }
 
     @Override
@@ -237,6 +239,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         try {
             if (intent.hasExtra("ai.plex.poc.android.startService")) {
                 stopAllSensors();
+                isRunning = true;
             } else if (ActivityRecognitionResult.hasResult(intent)) {
                 ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
                 DetectedActivity detectedActivity = result.getMostProbableActivity();
@@ -247,11 +250,10 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
                 new SensorDataWriter(this, SensorType.ACTIVITY_DETECTOR).writeData(detectedActivity);
                 Log.d(TAG, "Detected activity: " + mostProbableName + "(w confidence " + confidence + ")");
 
-                Intent localIntent =
-                        new Intent(Constants.ACTIVITY_UPDATE_BROADCAST_ACTION)
-                                // Puts the status into the Intent
-                                .putExtra(Constants.ACTIVITY_NAME, mostProbableName)
-                                .putExtra(Constants.ACTIVITY_CONFIDENCE, confidence);
+                Intent localIntent = new Intent(Constants.ACTIVITY_UPDATE_BROADCAST_ACTION)
+                        // Puts the status into the Intent
+                        .putExtra(Constants.ACTIVITY_NAME, mostProbableName)
+                        .putExtra(Constants.ACTIVITY_CONFIDENCE, confidence);
 
                 // Broadcasts the Intent to receivers in this app.
                 LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
@@ -260,6 +262,14 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
                 Location location = LocationResult.extractResult(intent).getLastLocation();
                 new SensorDataWriter(this, SensorType.LOCATION).writeData(location);
                 Log.i(TAG, "New Location at: " + location.getLatitude() + "/" + location.getLongitude() + " at " + location.getSpeed());
+
+                Intent localIntent = new Intent(Constants.LOCATION_UPDATE_BROADCAST_ACTION)
+                        // Puts the status into the Intent
+                        .putExtra(Constants.LATITUDE, location.getLatitude())
+                        .putExtra(Constants.LONGITUDE, location.getLongitude());
+
+                // Broadcasts the Intent to receivers in this app.
+                LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
             } else {
                 Log.d(TAG, "Intent had no data returned");
             }
@@ -343,6 +353,12 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
             ActivityRecognition.ActivityRecognitionApi.removeActivityUpdates(mGoogleApiClient, mActivityRecognitionPendingIntent);
             Log.d(TAG, "Activity detection stopped.");
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        isRunning = false;
+        super.onDestroy();
     }
 }
 
