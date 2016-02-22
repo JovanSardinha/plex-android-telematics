@@ -1,11 +1,12 @@
 package ai.plex.poc.android.activities;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -20,6 +21,7 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -40,11 +42,8 @@ import org.json.JSONObject;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -64,6 +63,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
     MotionDataService mService;
     boolean mBound = false;
+    ActivityUpdateReceiver mActivityUpdateReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,6 +111,18 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
                     requestLocationPermissionId);
         }
+
+        // The filter's action is BROADCAST_ACTION
+        IntentFilter statusIntentFilter = new IntentFilter(
+                ai.plex.poc.android.services.Constants.ACTIVITY_UPDATE_BROADCAST_ACTION);
+
+        // Instantiates a new DownloadStateReceiver
+        mActivityUpdateReceiver = new ActivityUpdateReceiver();
+
+        // Registers the DownloadStateReceiver and its intent filters
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                mActivityUpdateReceiver,
+                statusIntentFilter);
     }
 
     @Override
@@ -118,6 +130,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         super.onStart();
         // Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
+        mServiceIntent.putExtra("ai.plex.poc.android.startService", true);
         startService(mServiceIntent);
 
         bindService(mServiceIntent, mConnection, Context.BIND_AUTO_CREATE);
@@ -713,5 +726,31 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             return null;
         }
 
+    }
+
+    @Override
+    public void onDestroy() {
+        // If the DownloadStateReceiver still exists, unregister it and set it to null
+        if (mActivityUpdateReceiver != null) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(mActivityUpdateReceiver);
+            mActivityUpdateReceiver = null;
+        }
+
+        // Must always call the super method at the end.
+        super.onDestroy();
+    }
+
+    private class ActivityUpdateReceiver extends BroadcastReceiver {
+        private ActivityUpdateReceiver() {
+            // prevents instantiation by other packages.
+        }
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String activityName = intent.getStringExtra(ai.plex.poc.android.services.Constants.ACTIVITY_NAME);
+            int activityConfidence = intent.getIntExtra(ai.plex.poc.android.services.Constants.ACTIVITY_CONFIDENCE, -1);
+            TextView activityDetectorStatus = (TextView) findViewById(R.id.activityDetectorText);
+            activityDetectorStatus.setText(activityName + " - " + activityConfidence);
+        }
     }
 }
