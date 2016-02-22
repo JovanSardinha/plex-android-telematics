@@ -30,6 +30,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.ToggleButton;
 
 import org.json.JSONArray;
@@ -177,17 +178,21 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             return;
         }
 
+        TextView statusTextBox = (TextView) findViewById(R.id.statusText);
+
         boolean checked = false;
         // Check which checkbox was clicked
         switch(view.getId()) {
             case R.id.isDrivingToggleButton:
                 checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", checked).commit();
+                statusTextBox.setText("Driving - " + (checked? "ON" : "OFF"));
                 break;
             case R.id.isRecordingToggleButton:
                 checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", checked).commit();
                 toggleSwitches(checked);
+                statusTextBox.setText("Recording - " + (checked ? "ON" : "OFF"));
                 if (checked) {
                     mService.startAllSensors();
                 } else {
@@ -243,7 +248,12 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 break;
             case R.id.clearButton:
-                SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
+                try {
+                    SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
+                    statusTextBox.setText("Cleared data");
+                } catch (Exception e) {
+                    statusTextBox.setText("Error clearing data");
+                }
                 break;
             case R.id.submitButton:
                 try {
@@ -257,8 +267,11 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     SubmitRotation(username);
                     SubmitLocation(username);
                     SubmitDetectedActivity(username);
+                    statusTextBox.setText("Submitted data");
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                    statusTextBox.setText("Error submitting data");
                 }
         }
     }
@@ -601,6 +614,9 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
     public class PostDataTask extends AsyncTask<List<JSONObject>, Void, Void> {
         protected Void doInBackground(List<JSONObject>... events){
+            if (events[0].isEmpty()) {
+                return null;
+            }
 
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
