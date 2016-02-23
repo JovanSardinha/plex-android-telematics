@@ -61,6 +61,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     // Constant for requesting location permissions
     final int requestLocationPermissionId = 123;
 
+    static int globalCounter = 0;
+
     MotionDataService mService;
     boolean mBound = false;
     ActivityUpdateReceiver mActivityUpdateReceiver;
@@ -207,21 +209,19 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             return;
         }
 
-        TextView statusTextBox = (TextView) findViewById(R.id.statusText);
-
         boolean checked = false;
         // Check which checkbox was clicked
         switch(view.getId()) {
             case R.id.isDrivingToggleButton:
                 checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", checked).commit();
-                statusTextBox.setText("Driving - " + (checked? "ON" : "OFF"));
+                updateStatus("Driving - " + (checked ? "ON" : "OFF"));
                 break;
             case R.id.isRecordingToggleButton:
                 checked = ((ToggleButton) view).isChecked();
                 PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", checked).commit();
                 toggleSwitches(checked);
-                statusTextBox.setText("Recording - " + (checked ? "ON" : "OFF"));
+                updateStatus("Recording - " + (checked ? "ON" : "OFF"));
                 if (checked) {
                     mService.startAllSensors();
                 } else {
@@ -279,9 +279,9 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             case R.id.clearButton:
                 try {
                     SnapShotDBHelper.clearTables(SnapShotDBHelper.getsInstance(this).getWritableDatabase());
-                    statusTextBox.setText("Cleared data");
+                    updateStatus("Cleared data");
                 } catch (Exception e) {
-                    statusTextBox.setText("Error clearing data");
+                    updateStatus("Error clearing data");
                 }
                 break;
             case R.id.submitButton:
@@ -296,17 +296,16 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     SubmitRotation(username);
                     SubmitLocation(username);
                     SubmitDetectedActivity(username);
-                    statusTextBox.setText("Submitted data");
+                    updateStatus("Data submission complete");
 
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    statusTextBox.setText("Error submitting data");
+                    updateStatus("Error submitting data");
                 }
         }
     }
 
     private void stopRecording() {
-
         ToggleButton drivingToggle = (ToggleButton) findViewById(R.id.isDrivingToggleButton);
         ToggleButton recordingToggle = (ToggleButton) findViewById(R.id.isRecordingToggleButton);
         drivingToggle.setChecked(false);
@@ -317,6 +316,12 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         toggleSwitches(false);
     }
+
+    private void updateStatus(String str) {
+        TextView statusTextBox = (TextView) findViewById(R.id.statusText);
+        statusTextBox.setText(str);
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -343,6 +348,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
         Cursor cursor = null;
+
         try {
             cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null);
 
@@ -368,11 +374,16 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Acc 0/" + data.size());
+
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Acc " + start +"/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -419,11 +430,16 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Gyro 0/" + data.size());
+
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Gyro " + start +"/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -468,11 +484,15 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Mag 0/" + data.size());
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Mag " + start + "/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -521,11 +541,15 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Rot 0/" + data.size());
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Rot " + start + "/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -571,11 +595,15 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Loc 0/" + data.size());
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Loc " + start + "/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -621,11 +649,15 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 data.add(responseObject);
             }
 
+            updateStatus("Act 0/" + data.size());
             int page_size = 10;
             int num_pages = (data.size()/page_size) + 1;
             for (int page = 0; page < num_pages; page++){
                 int start = page * page_size;
                 int end = start + page_size;
+                if (page % 10 == 0) {
+                    updateStatus("Act " + start + "/" + data.size());
+                }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
                 new PostDataTask().execute(set);
@@ -724,6 +756,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
                         int response = conn.getResponseCode();
                         Log.d("Records submitted", "The response is: " + response);
+                        updateStatus("Submitting records " + globalCounter++);
                     } catch (Exception e) {
                         e.printStackTrace();
                     } finally {
@@ -779,8 +812,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         public void onReceive(Context context, Intent intent) {
             Double latitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LATITUDE, -1.0);
             Double longitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LONGITUDE, -1.0);
-            TextView activityDetectorStatus = (TextView) findViewById(R.id.locationStatus);
-            activityDetectorStatus.setText("[" + latitude + ", " + longitude+"]");
+            TextView locationStatus = (TextView) findViewById(R.id.locationStatus);
+            locationStatus.setText("[" + latitude + ", " + longitude+"]");
         }
     }
 }

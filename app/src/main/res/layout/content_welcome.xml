@@ -139,7 +139,9 @@
         android:onClick="onClicked"
         android:layout_below="@+id/locationSwitch"
         android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true" />
+        android:layout_alignParentStart="true"
+        android:layout_alignRight="@+id/isDrivingToggleButton"
+        android:layout_alignEnd="@+id/isDrivingToggleButton" />
 
     <Button
         android:layout_width="400px"
@@ -184,24 +186,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textAppearance="?android:attr/textAppearanceSmall"
-        android:text="Status"
-        android:id="@+id/statusText"
-        android:layout_below="@+id/isDrivingToggleButton"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/isRecordingTextView"
-        android:layout_alignEnd="@+id/isRecordingTextView" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceSmall"
         android:text="Activity"
         android:id="@+id/activityDetectorText"
-        android:layout_alignTop="@+id/statusText"
-        android:layout_toRightOf="@+id/statusText"
-        android:layout_alignRight="@+id/isDrivingToggleButton"
-        android:layout_alignEnd="@+id/isDrivingToggleButton" />
+        android:layout_below="@+id/statusText"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 
     <TextView
         android:layout_width="wrap_content"
@@ -209,10 +198,20 @@
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:text="Location"
         android:id="@+id/locationStatus"
-        android:layout_below="@+id/clearButton"
+        android:layout_below="@+id/isDrivingToggleButton"
         android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_toLeftOf="@+id/activityDetectorText"
-        android:layout_toStartOf="@+id/activityDetectorText" />
+        android:layout_alignParentStart="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="Status"
+        android:id="@+id/statusText"
+        android:layout_below="@+id/clearButton"
+        android:layout_alignRight="@+id/isDrivingToggleButton"
+        android:layout_alignEnd="@+id/isDrivingToggleButton"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 
 </RelativeLayout>
