@@ -24,4 +24,13 @@ public final class Constants {
     public static final String ACTIVITY_CONFIDENCE =
             "ai.plex.poc.android.ACTIVITY_CONFIDENCE";
 
+    public static final String LOCATION_UPDATE_BROADCAST_ACTION =
+            "ai.plex.poc.android.LOCATION_UPDATE_BROADCAST_ACTION";
+
+    // Extra's for activity update broadcast Intent
+    public static final String LATITUDE =
+            "ai.plex.poc.android.LATITUDE";
+
+    public static final String LONGITUDE =
+            "ai.plex.poc.android.LONGITUDE";
 }

@@ -64,6 +64,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     MotionDataService mService;
     boolean mBound = false;
     ActivityUpdateReceiver mActivityUpdateReceiver;
+    LocationUpdateReceiver mLocationUpdateReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,17 +113,29 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     requestLocationPermissionId);
         }
 
-        // The filter's action is BROADCAST_ACTION
-        IntentFilter statusIntentFilter = new IntentFilter(
+        // The filter's action is ACTIVITY_UPDATE_BROADCAST_ACTION
+        IntentFilter activityUpdateIntentFilter = new IntentFilter(
                 ai.plex.poc.android.services.Constants.ACTIVITY_UPDATE_BROADCAST_ACTION);
 
-        // Instantiates a new DownloadStateReceiver
+        // Instantiates a new ActivityUpdateReceiver
         mActivityUpdateReceiver = new ActivityUpdateReceiver();
 
         // Registers the DownloadStateReceiver and its intent filters
         LocalBroadcastManager.getInstance(this).registerReceiver(
                 mActivityUpdateReceiver,
-                statusIntentFilter);
+                activityUpdateIntentFilter);
+
+        // The filter's action is LOCATION_UPDATE_BROADCAST_ACTION
+        IntentFilter locationIntentFilter = new IntentFilter(
+                ai.plex.poc.android.services.Constants.LOCATION_UPDATE_BROADCAST_ACTION);
+
+        // Instantiates a new LocationUpdateReceiver
+        mLocationUpdateReceiver = new LocationUpdateReceiver();
+
+        // Registers the DownloadStateReceiver and its intent filters
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                mLocationUpdateReceiver,
+                locationIntentFilter);
     }
 
     @Override
@@ -130,8 +143,11 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         super.onStart();
         // Start the background service
         Intent mServiceIntent = new Intent(this, MotionDataService.class);
-        mServiceIntent.putExtra("ai.plex.poc.android.startService", true);
-        startService(mServiceIntent);
+
+        if (MotionDataService.isRunning()) {
+            mServiceIntent.putExtra("ai.plex.poc.android.startService", true);
+            startService(mServiceIntent);
+        }
 
         bindService(mServiceIntent, mConnection, Context.BIND_AUTO_CREATE);
     }
@@ -730,7 +746,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
     @Override
     public void onDestroy() {
-        // If the DownloadStateReceiver still exists, unregister it and set it to null
+        // If the ActivityUpdateReceiver still exists, unregister it and set it to null
         if (mActivityUpdateReceiver != null) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(mActivityUpdateReceiver);
             mActivityUpdateReceiver = null;
@@ -751,6 +767,20 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             int activityConfidence = intent.getIntExtra(ai.plex.poc.android.services.Constants.ACTIVITY_CONFIDENCE, -1);
             TextView activityDetectorStatus = (TextView) findViewById(R.id.activityDetectorText);
             activityDetectorStatus.setText(activityName + " - " + activityConfidence);
+        }
+    }
+
+    private class LocationUpdateReceiver extends BroadcastReceiver {
+        private LocationUpdateReceiver() {
+            // prevents instantiation by other packages.
+        }
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Double latitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LATITUDE, -1.0);
+            Double longitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LONGITUDE, -1.0);
+            TextView activityDetectorStatus = (TextView) findViewById(R.id.locationStatus);
+            activityDetectorStatus.setText("[" + latitude + ", " + longitude+"]");
         }
     }
 }
