@@ -54,6 +54,8 @@ import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.sensorListeners.SensorType;
 import ai.plex.poc.android.services.MotionDataService;
+import ai.plex.poc.android.tasks.PostDataTask;
+import ai.plex.poc.android.tasks.ReadDataTask;
 
 public class Welcome extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
     private final static String TAG = Welcome.class.getSimpleName();
@@ -288,14 +290,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 try {
                     mService.stopAllSensors();
                     stopRecording();
-
                     String username = PreferenceManager.getDefaultSharedPreferences(this).getString("username", "default_user");
-                    SubmitLinearAcceleration(username);
-                    SubmitGyroscope(username);
-                    SubmitMagnetic(username);
-                    SubmitRotation(username);
-                    SubmitLocation(username);
-                    SubmitDetectedActivity(username);
+                    submitData(username);
                     updateStatus("Data submission complete");
 
                 } catch (Exception ex) {
@@ -303,6 +299,18 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                     updateStatus("Error submitting data");
                 }
         }
+    }
+
+    //Submits the collected sensor data
+    private void submitData(String username) {
+        globalCounter = 0;
+        new ReadDataTask(this).execute(username);
+        /*SubmitLinearAcceleration(username);
+        SubmitGyroscope(username);
+        SubmitMagnetic(username);
+        SubmitRotation(username);
+        SubmitLocation(username);
+        SubmitDetectedActivity(username);*/
     }
 
     private void stopRecording() {
@@ -317,14 +325,28 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         toggleSwitches(false);
     }
 
-    private void updateStatus(String str) {
+    public void updateStatus(String str) {
         TextView statusTextBox = (TextView) findViewById(R.id.statusText);
         statusTextBox.setText(str);
     }
 
+    public synchronized void incrementGlobalCounter(int amount){
+        globalCounter += amount;
+    }
+
+    public synchronized void decrementGlobalCounter(int amount){
+        globalCounter -= amount;
+    }
+
+    public int getGlobalCounter(){
+        return globalCounter;
+    }
+
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
+        globalCounter =0;
         getMenuInflater().inflate(R.menu.menu_welcome, menu);
         return true;
     }
@@ -343,7 +365,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         return super.onOptionsItemSelected(item);
     }
 
-    public void SubmitLinearAcceleration(String username) {
+    /*public void SubmitLinearAcceleration(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         ArrayList<JSONObject> data = new ArrayList();
         Integer lastRecord = -1;
@@ -386,7 +408,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
 
             int count = db.delete(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, null);
@@ -442,7 +464,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
             int count = db.delete(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, null);
             Log.d(TAG, "Deleted " + String.valueOf(count) + " gyroscope records.");
@@ -495,7 +517,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
             int count = db.delete(SnapShotContract.MagneticEntry.TABLE_NAME, null, null);
             Log.d(TAG, "Deleted " + String.valueOf(count) + " magnetic records.");
@@ -552,7 +574,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
 
             int count = db.delete(SnapShotContract.RotationEntry.TABLE_NAME, null, null);
@@ -606,7 +628,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
 
             int count = db.delete(SnapShotContract.LocationEntry.TABLE_NAME, null, null);
@@ -660,7 +682,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 }
                 end = end > data.size() ? data.size() : end;
                 List set = data.subList(start, end);
-                new PostDataTask().execute(set);
+                new PostDataTask(this).execute(set);
             }
             int count = db.delete(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, null);
             Log.d(TAG, "Deleted " + String.valueOf(count) + " activity detection records.");
@@ -671,111 +693,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             cursor.close();
             db.close();
         }
-    }
+    }*/
 
-    public class PostDataTask extends AsyncTask<List<JSONObject>, Void, Void> {
-        protected Void doInBackground(List<JSONObject>... events){
-            if (events[0].isEmpty()) {
-                return null;
-            }
-
-            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
-
-            String dataType = "";
-            String api_route = "";
-            try {
-                dataType = events[0].get(0).get("dataType").toString();
-                switch (dataType){
-                    case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
-                        api_route = "androidLinearAccelerations";
-                        break;
-                    case SnapShotContract.GyroscopeEntry.TABLE_NAME:
-                        api_route = "androidGyroscopes";
-                        break;
-                    case SnapShotContract.MagneticEntry.TABLE_NAME:
-                        api_route = "androidMagnetics";
-                        break;
-                    case SnapShotContract.RotationEntry.TABLE_NAME:
-                        api_route = "androidRotations";
-                        break;
-                    case SnapShotContract.LocationEntry.TABLE_NAME:
-                        api_route = "androidLocations";
-                        break;
-                    case SnapShotContract.DetectedActivityEntry.TABLE_NAME:
-                        api_route = "androidActivities";
-                        break;
-                }
-            } catch (Exception e){
-                e.printStackTrace();
-            }
-
-            if (networkInfo != null && networkInfo.isConnected() && networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
-                    JSONObject requestData = new JSONObject();
-                    JSONArray dataPoints = new JSONArray(events[0]);
-                    try {
-                        requestData.put("entries", dataPoints);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                    InputStream is = null;
-                    // Only display the first 500 characters of the retrieved
-                    // web page content.
-
-                    try {
-                        //Define the URL
-                        URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ api_route);
-
-                        String message = requestData.toString();
-
-                        //Open a connection
-                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                        //Set connection details
-                        conn.setReadTimeout(10000 /* milliseconds */);
-                        conn.setConnectTimeout(15000 /* milliseconds */);
-                        conn.setRequestMethod("POST");
-                        conn.setDoInput(true);
-                        conn.setDoOutput(true);
-
-                        //Set header details
-                        conn.setRequestProperty("Content-Type","application/json;charset=utf-8");
-                        conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
-
-                        //Connect
-                        conn.connect();
-
-                        //Setup data to send
-                        OutputStream os = new BufferedOutputStream(conn.getOutputStream());
-                        os.write(message.getBytes());
-                        os.flush();
-
-                        //Write the data
-                        OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
-                        wr.write(message);
-                        wr.flush();
-
-                        int response = conn.getResponseCode();
-                        Log.d("Records submitted", "The response is: " + response);
-                        updateStatus("Submitting records " + globalCounter++);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (is != null) {
-                            try {
-                                is.close();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-            } else {
-                // display error
-                Log.d(TAG, "WIFI is not connected, data can't be submitted");
-            }
-            return null;
-        }
-
-    }
 
     @Override
     public void onDestroy() {

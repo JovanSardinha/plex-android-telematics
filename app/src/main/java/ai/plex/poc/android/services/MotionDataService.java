@@ -142,19 +142,23 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         // Register listeners on the SensorListener thread
         switch(sensorType) {
             case LINEAR_ACCELERATION:
-                mSensorManager.registerListener(linearAccelerationMonitor, linearAccelerationSensor,
+                if (linearAccelerationSensor != null)
+                    mSensorManager.registerListener(linearAccelerationMonitor, linearAccelerationSensor,
                         SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
                 break;
             case ROTATION:
-                mSensorManager.registerListener(rotationMonitor, rotationSensor,
+                if (rotationSensor != null)
+                    mSensorManager.registerListener(rotationMonitor, rotationSensor,
                         SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
                 break;
             case GYROSCOPE:
-                mSensorManager.registerListener(gyroscopeMonitor, gyroscopeSensor,
+                if (gyroscopeSensor != null)
+                    mSensorManager.registerListener(gyroscopeMonitor, gyroscopeSensor,
                         SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
                 break;
             case MAGNETIC:
-                mSensorManager.registerListener(magneticMonitor, magneticSensor,
+                if (magneticSensor != null)
+                    mSensorManager.registerListener(magneticMonitor, magneticSensor,
                         SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
                 break;
             case LOCATION:
