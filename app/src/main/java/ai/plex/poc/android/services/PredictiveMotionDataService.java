@@ -9,7 +9,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
-
 import android.location.Location;
 import android.os.Binder;
 import android.os.Bundle;
@@ -29,22 +28,27 @@ import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.common.collect.EvictingQueue;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import ai.plex.poc.android.sensorListeners.GyroscopeMonitor;
 import ai.plex.poc.android.sensorListeners.LinearAccelerationMonitor;
-import ai.plex.poc.android.sensorListeners.LocationMonitor;
 import ai.plex.poc.android.sensorListeners.MagneticMonitor;
 import ai.plex.poc.android.sensorListeners.RotationMonitor;
 import ai.plex.poc.android.sensorListeners.SensorDataWriter;
 import ai.plex.poc.android.sensorListeners.SensorType;
 
 /**
- * Intent service used to obtain telematics data from the phone
+ * Created by ashish on 24/02/16.
  */
-public class MotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class PredictiveMotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
     private static boolean isRunning = false;
+    private static boolean isDriving = false;
 
-    private static final String TAG = MotionDataService.class.getSimpleName();
+    private static final String TAG = PredictiveMotionDataService.class.getSimpleName();
 
     //Used to allow sensor data to recorded on a separate thread
     private static HandlerThread sensorHandlerThread;
@@ -71,6 +75,13 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     PendingIntent mLocationMonitoringIntent;
     PendingIntent mActivityRecognitionPendingIntent;
 
+    private static long initialActivityDetectionRequestInterval = 1000;
+    private static long activityDetectionRequestInterval = 1000;
+    private static long maxActivityDetectionRequestInterval = 5 * 60 * 1000; // 5 min
+    private static final double minDistanceTravelled = 50; // Must travel 50 m in 20s in order to keep recording
+    private static EvictingQueue<Location> recentLocations = EvictingQueue.create(20);
+
+
     // Binder given to clients
     private final IBinder mBinder = new MotionDataBinder();
 
@@ -79,14 +90,14 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
      * runs in the same process as its clients, we don't need to deal with IPC.
      */
     public class MotionDataBinder extends Binder {
-        public MotionDataService getService() {
-            // Return this instance of MotionDataService so clients can call public methods
-            return MotionDataService.this;
+        public PredictiveMotionDataService getService() {
+            // Return this instance of PredictiveMotionDataService so clients can call public methods
+            return PredictiveMotionDataService.this;
         }
     }
 
-    public MotionDataService() {
-        super("MotionDataService");
+    public PredictiveMotionDataService() {
+        super("PredictiveMotionDataService");
     }
 
     public static boolean isRunning() {
@@ -237,10 +248,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     @Override
     protected void onHandleIntent(Intent intent) {
         try {
-            if (intent.hasExtra("ai.plex.poc.android.startService")) {
-                stopAllSensors();
-                isRunning = true;
-            } else if (ActivityRecognitionResult.hasResult(intent)) {
+             if (ActivityRecognitionResult.hasResult(intent)) {
                 ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
                 DetectedActivity detectedActivity = result.getMostProbableActivity();
 
@@ -258,22 +266,38 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
                 // Broadcasts the Intent to receivers in this app.
                 LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
 
+                 // In vehicle
+                 if (!isDriving) {
+                     if (detectedActivity.getType() == DetectedActivity.ON_FOOT) {
+                        resetActivityDetectionRequestInterval();
+                        startDriving();
+                        startAllSensors();
+                     } else if (activityDetectionRequestInterval < maxActivityDetectionRequestInterval) {
+                       activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
+                        Log.d(TAG, "Backoff time updated to " + activityDetectionRequestInterval / 1000 + " s");
+                        startSensor(SensorType.ACTIVITY_DETECTOR);
+                     }
+                 }
             } else if (LocationResult.hasResult(intent)) {
                 Location location = LocationResult.extractResult(intent).getLastLocation();
                 new SensorDataWriter(this, SensorType.LOCATION).writeData(location);
                 Log.i(TAG, "New Location at: " + location.getLatitude() + "/" + location.getLongitude() + " at " + location.getSpeed());
 
                 Intent localIntent = new Intent(Constants.LOCATION_UPDATE_BROADCAST_ACTION)
-                        // Puts the status into the Intent
-                        .putExtra(Constants.LATITUDE, location.getLatitude())
-                        .putExtra(Constants.LONGITUDE, location.getLongitude());
+                    .putExtra(Constants.LATITUDE, location.getLatitude())
+                    .putExtra(Constants.LONGITUDE, location.getLongitude());
 
                 // Broadcasts the Intent to receivers in this app.
                 LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
+                recentLocations.add(location);
+                double recentDistance = recentDistanceTravelled();
+                if (recentLocations.size() == 20 && recentDistance < minDistanceTravelled) {
+                    stopDriving();
+                }
+                 Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
             } else {
                 Log.d(TAG, "Intent had no data returned");
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -305,6 +329,11 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     @Override
     public void onConnected(Bundle bundle) {
         Log.d(TAG, "GoogleApiClient connected.");
+        if (!isRunning) {
+            isRunning = true;
+            stopAllSensors();
+            startSensor(SensorType.ACTIVITY_DETECTOR);
+        }
     }
 
     @Override
@@ -320,7 +349,7 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
     private void startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             if (mLocationMonitoringIntent == null) {
-                Intent i = new Intent(this, MotionDataService.class);
+                Intent i = new Intent(this, PredictiveMotionDataService.class);
                 mLocationMonitoringIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
             }
 
@@ -340,11 +369,11 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
 
     private void startActivityDetection() {
         if (mActivityRecognitionPendingIntent == null) {
-            Intent i = new Intent(this, MotionDataService.class);
+            Intent i = new Intent(this, PredictiveMotionDataService.class);
             mActivityRecognitionPendingIntent = PendingIntent.getService(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT);
         }
 
-        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mGoogleApiClient, 1000, mActivityRecognitionPendingIntent);
+        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mGoogleApiClient, activityDetectionRequestInterval, mActivityRecognitionPendingIntent);
         Log.d(TAG, "Activity detection started.");
     }
 
@@ -355,11 +384,85 @@ public class MotionDataService extends IntentService implements GoogleApiClient.
         }
     }
 
+    private void resetActivityDetectionRequestInterval() {
+        activityDetectionRequestInterval = initialActivityDetectionRequestInterval;
+    }
+
+    private long nextActivityDetectionRequestInterval() {
+        long interval;
+        interval = activityDetectionRequestInterval * 2;
+        interval = interval >= maxActivityDetectionRequestInterval ?
+                maxActivityDetectionRequestInterval : interval;
+        return interval;
+    }
+
+    private void startDriving() {
+        isDriving = true;
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", true).commit();
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", true).commit();
+        Log.d(TAG, "Started driving.");
+    }
+
+    private void stopDriving() {
+        isDriving = false;
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", false).commit();
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", false).commit();
+        resetActivityDetectionRequestInterval();
+        recentLocations.clear();
+
+        // Stop everything but activity detection
+        stopSensor(SensorType.LINEAR_ACCELERATION);
+        stopSensor(SensorType.GYROSCOPE);
+        stopSensor(SensorType.ROTATION);
+        stopSensor(SensorType.MAGNETIC);
+        stopSensor(SensorType.LOCATION);
+
+        Log.d(TAG, "Stopped driving.");
+    }
+
+    private double distanceBetweenPoints(Location point1, Location point2) {
+        if (point1 == null || point2 == null)
+            return 0.0;
+        // approximate radius of earth in m
+        double R = 6373000.0;
+
+        double lat1 = Math.toRadians(point1.getLatitude());
+        double lon1 = Math.toRadians(point1.getLongitude());
+        double lat2 = Math.toRadians(point2.getLatitude());
+        double lon2 = Math.toRadians(point2.getLongitude());
+
+        double dlon = lon2 - lon1;
+        double dlat = lat2 - lat1;
+
+        double a = Math.pow(Math.sin(dlat / 2),2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dlon / 2), 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    }
+
+    private double recentDistanceTravelled() {
+        if (recentLocations.isEmpty() || recentLocations.size() == 1)
+            return 0.0;
+
+        double distance = 0.0;
+        Iterator<Location> iter = recentLocations.iterator();
+        Location prev = iter.hasNext() ? iter.next() : null;
+        while (iter.hasNext()) {
+            Location curr = iter.next();
+            distance = distance + distanceBetweenPoints(prev, curr);
+            prev = curr;
+        }
+        return distance;
+    }
+
     @Override
     public void onDestroy() {
         isRunning = false;
         super.onDestroy();
+        stopDriving();
+        stopLocationUpdates();
+        stopActivityDetection();
     }
 }
-
-
