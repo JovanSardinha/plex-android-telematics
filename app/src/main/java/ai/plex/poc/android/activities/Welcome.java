@@ -8,12 +8,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
@@ -34,27 +28,10 @@ import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.ToggleButton;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-
 import ai.plex.poc.android.R;
-import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.sensorListeners.SensorType;
 import ai.plex.poc.android.services.PredictiveMotionDataService;
-import ai.plex.poc.android.tasks.PostDataTask;
 import ai.plex.poc.android.tasks.ReadDataTask;
 
 
