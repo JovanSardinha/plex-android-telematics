@@ -53,9 +53,10 @@ import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.sensorListeners.SensorType;
-import ai.plex.poc.android.services.MotionDataService;
+import ai.plex.poc.android.services.PredictiveMotionDataService;
 import ai.plex.poc.android.tasks.PostDataTask;
 import ai.plex.poc.android.tasks.ReadDataTask;
+
 
 public class Welcome extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
     private final static String TAG = Welcome.class.getSimpleName();
@@ -65,7 +66,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
     static int globalCounter = 0;
 
-    MotionDataService mService;
+    PredictiveMotionDataService mService;
     boolean mBound = false;
     ActivityUpdateReceiver mActivityUpdateReceiver;
     LocationUpdateReceiver mLocationUpdateReceiver;
@@ -146,9 +147,9 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     protected void onStart() {
         super.onStart();
         // Start the background service
-        Intent mServiceIntent = new Intent(this, MotionDataService.class);
+        Intent mServiceIntent = new Intent(this, PredictiveMotionDataService.class);
 
-        if (MotionDataService.isRunning()) {
+        if (!PredictiveMotionDataService.isRunning()) {
             mServiceIntent.putExtra("ai.plex.poc.android.startService", true);
             startService(mServiceIntent);
         }
@@ -160,17 +161,17 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     private ServiceConnection mConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName className, IBinder service) {
-            // We've bound to MotionDataService, cast the IBinder and get MotionDataService instance
-            MotionDataService.MotionDataBinder binder = (MotionDataService.MotionDataBinder) service;
+            // We've bound to PredictiveMotionDataService, cast the IBinder and get PredictiveMotionDataService instance
+            PredictiveMotionDataService.MotionDataBinder binder = (PredictiveMotionDataService.MotionDataBinder) service;
             mService = binder.getService();
             mBound = true;
-            Log.d(TAG, "Bound to MotionDataService.");
+            Log.d(TAG, "Bound to PredictiveMotionDataService.");
         }
 
         @Override
         public void onServiceDisconnected(ComponentName arg0) {
             mBound = false;
-            Log.d(TAG, "Unbound from MotionDataService.");
+            Log.d(TAG, "Unbound from PredictiveMotionDataService.");
         }
     };
 
@@ -207,7 +208,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
     public void onClicked(View view) {
         if (!mBound) {
-            Log.d(TAG, "MotionDataService not bound. Bind service to start updates.");
+            Log.d(TAG, "PredictiveMotionDataService not bound. Bind service to start updates.");
             return;
         }
 
@@ -704,6 +705,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             mActivityUpdateReceiver = null;
         }
 
+        unbindService(mConnection);
+
         // Must always call the super method at the end.
         super.onDestroy();
     }
@@ -719,6 +722,10 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
             int activityConfidence = intent.getIntExtra(ai.plex.poc.android.services.Constants.ACTIVITY_CONFIDENCE, -1);
             TextView activityDetectorStatus = (TextView) findViewById(R.id.activityDetectorText);
             activityDetectorStatus.setText(activityName + " - " + activityConfidence);
+
+            boolean isDriving = PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).getBoolean("isDriving", false);
+            boolean isRecording = PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).getBoolean("isRecording", false);
+            updateStatus("[Recording, Driving] = [" + isRecording + ", " + isDriving + "]");
         }
     }
 

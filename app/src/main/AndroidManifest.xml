@@ -30,7 +30,7 @@
             </intent-filter>
         </receiver>-->
         <service
-            android:name=".services.MotionDataService"
+            android:name=".services.PredictiveMotionDataService"
             android:exported="false"/>
     </application>
 </manifest>
