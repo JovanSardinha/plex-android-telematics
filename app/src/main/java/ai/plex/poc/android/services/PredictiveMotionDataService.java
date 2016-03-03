@@ -75,10 +75,11 @@ public class PredictiveMotionDataService extends IntentService implements Google
     PendingIntent mLocationMonitoringIntent;
     PendingIntent mActivityRecognitionPendingIntent;
 
+    private static int sensorDelayInterval = 1000000; // specified in microseconds
     private static long initialActivityDetectionRequestInterval = 1000;
     private static long activityDetectionRequestInterval = 1000;
     private static long maxActivityDetectionRequestInterval = 5 * 60 * 1000; // 5 min
-    private static final double minDistanceTravelled = 50; // Must travel 50 m in 20s in order to keep recording
+    private static final double minDistanceTravelled = 100; // Must travel 100 m in 20s in order to keep recording
     private static EvictingQueue<Location> recentLocations = EvictingQueue.create(20);
 
 
@@ -155,22 +156,22 @@ public class PredictiveMotionDataService extends IntentService implements Google
             case LINEAR_ACCELERATION:
                 if (linearAccelerationSensor != null)
                     mSensorManager.registerListener(linearAccelerationMonitor, linearAccelerationSensor,
-                        SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case ROTATION:
                 if (rotationSensor != null)
                     mSensorManager.registerListener(rotationMonitor, rotationSensor,
-                        SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case GYROSCOPE:
                 if (gyroscopeSensor != null)
                     mSensorManager.registerListener(gyroscopeMonitor, gyroscopeSensor,
-                        SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case MAGNETIC:
                 if (magneticSensor != null)
                     mSensorManager.registerListener(magneticMonitor, magneticSensor,
-                        SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case LOCATION:
                 if (mGoogleApiClient.isConnected()) {
@@ -272,7 +273,7 @@ public class PredictiveMotionDataService extends IntentService implements Google
 
                  // In vehicle
                  if (!isDriving) {
-                     if (detectedActivity.getType() == DetectedActivity.ON_FOOT) {
+                      if (detectedActivity.getType() == DetectedActivity.IN_VEHICLE) {
                         resetActivityDetectionRequestInterval();
                         startDriving();
                         startAllSensors();
@@ -298,7 +299,7 @@ public class PredictiveMotionDataService extends IntentService implements Google
                 if (recentLocations.size() == 20 && recentDistance < minDistanceTravelled) {
                     stopDriving();
                 }
-                 Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
+                Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
             } else {
                 Log.d(TAG, "Intent had no data returned");
             }
