@@ -58,6 +58,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_Z, event.values[2]);
                             values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, null, values);
                             break;
                         case GYROSCOPE:
@@ -66,6 +67,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z, event.values[2]);
                             values.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.GyroscopeEntry.TABLE_NAME, null, values);
                             break;
                         case MAGNETIC:
@@ -74,6 +76,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.MagneticEntry.COLUMN_Z, event.values[2]);
                             values.put(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.MagneticEntry.TABLE_NAME, null, values);
                             break;
                         case ROTATION:
@@ -84,6 +87,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, event.values[4]);
                             values.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.RotationEntry.TABLE_NAME, null, values);
                             break;
                         case LOCATION:
@@ -92,6 +96,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.LocationEntry.COLUMN_SPEED, location.getSpeed());
                             values.put(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP, new Date().getTime());
+                            values.put(SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.LocationEntry.TABLE_NAME, null, values);
                             break;
                         case ACTIVITY_DETECTOR:
@@ -99,6 +104,7 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE, String.valueOf(activity.getConfidence()));
                             values.put(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP, new Date().getTime());
                             values.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
+                            values.put(SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED, "false");
                             rowId = db.insert(SnapShotContract.DetectedActivityEntry.TABLE_NAME, null, values);
                             break;
                     }

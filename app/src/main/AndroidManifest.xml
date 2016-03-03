@@ -32,5 +32,11 @@
         <service
             android:name=".services.PredictiveMotionDataService"
             android:exported="false"/>
+        <service
+            android:name=".services.DatabaseService"
+            android:exported="false"/>
+        <service
+            android:name=".services.RemoteApiService"
+            android:exported="false"/>
     </application>
 </manifest>
