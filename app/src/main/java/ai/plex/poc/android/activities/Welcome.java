@@ -266,12 +266,11 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
                 break;
             case R.id.submitButton:
                 try {
-                    mService.stopAllSensors();
-                    stopRecording();
+                    //mService.stopAllButActivitySensors();
+                    //stopRecording();
                     String username = PreferenceManager.getDefaultSharedPreferences(this).getString("username", "default_user");
                     submitData(username);
                     updateStatus("Data submission complete");
-
                 } catch (Exception ex) {
                     ex.printStackTrace();
                     updateStatus("Error submitting data");
