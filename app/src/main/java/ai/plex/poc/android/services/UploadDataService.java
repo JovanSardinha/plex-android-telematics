@@ -2,15 +2,25 @@ package ai.plex.poc.android.services;
 
 import android.app.IntentService;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Build;
 import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
@@ -21,18 +31,15 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
  * predictive motion data service and uploading it to the server for analysis.
  * The service
  * */
-public class DatabaseService extends IntentService {
+public class UploadDataService extends IntentService {
     //Flag if the service is started
     private static boolean isRunning = false;
 
-    //Flag used to block further data uploading
-    public static boolean isUploading = false;
-
     //Tag for logging purposes
-    private static final String TAG = DatabaseService.class.getSimpleName();
+    private static final String TAG = UploadDataService.class.getSimpleName();
 
-    public DatabaseService(){
-        super("DatabaseService");
+    public UploadDataService(){
+        super("UploadDataService");
     }
 
     /**
@@ -45,7 +52,7 @@ public class DatabaseService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         switch (intent.getAction()){
             case "ai.plex.poc.android.submitData":
-                if (!isUploading) {
+
                     String userId = intent.getStringExtra("userId");
                     submitLinearAcceleration(userId);
                     submitMagnetic(userId);
@@ -53,21 +60,6 @@ public class DatabaseService extends IntentService {
                     submitDetectedActivity(userId);
                     submitGyroscope(userId);
                     submitRotation(userId);
-                } else {
-                    Log.d(TAG, "onHandleIntent: Database service is currently uploading!");
-                }
-                break;
-            case "ai.plex.poc.android.updateDataAsSubmitted":
-                try {
-                    JSONObject dataIds = new JSONObject(intent.getStringExtra("dataIds"));
-                    updateDataAsSubmitted(dataIds);
-                } catch (JSONException ex){
-                    Log.d(TAG, "onHandleIntent: " + ex.getMessage());
-                    ex.printStackTrace();
-                }
-                break;
-            case "ai.plex.poc.android.uploadingComplete":
-                isUploading = false;
                 break;
         }
     }
@@ -110,25 +102,25 @@ public class DatabaseService extends IntentService {
      * @param ids
      */
     private void markDataAsSubmitted(JSONArray ids, String tableName, String columnName, String idColumn ){
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
-        for (int i = 0; i < ids.length(); i++){
-            String id = "";
-            //Get the id
-            try {
-                 id = ids.getString(i);
-            } catch (JSONException e) {
-                e.printStackTrace();
+        try {
+            SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+            String queryPart = " IN (";
+            for (int i = 0; i < ids.length(); i++) {
+                queryPart += String.valueOf(ids.get(i)) + ",";
             }
 
-            //New value for one column
+            //remove the last comma and add a closing bracket
+            queryPart = queryPart.substring(0, queryPart.lastIndexOf(',') - 1) + " )";
+
             ContentValues values = new ContentValues();
             values.put(columnName, "true");
-
-            //Which row to update
-            String selection = idColumn + " = ?";
-            String[] selectionArgs = {id};
-            int result = db.update(tableName, values, selection, selectionArgs );
+            String selection = idColumn + queryPart;
+            //String[] selectionArgs = {queryPart};
+            int result = db.update(tableName, values, selection, null);
             Log.d(TAG, "markDataAsSubmitted: Updated record with _id " + result);
+        } catch (Exception ex){
+            Log.d(TAG, "markDataAsSubmitted: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
@@ -141,12 +133,6 @@ public class DatabaseService extends IntentService {
         JSONObject dataIdsObject = new JSONObject();
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
-
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.LinearAccelerationEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -182,9 +168,14 @@ public class DatabaseService extends IntentService {
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.LinearAccelerationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -192,9 +183,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.LinearAccelerationEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting linear acceleration data to API.");
@@ -215,12 +207,6 @@ public class DatabaseService extends IntentService {
         JSONObject dataIdsObject = new JSONObject();
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
-
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.GyroscopeEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -257,9 +243,14 @@ public class DatabaseService extends IntentService {
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.GyroscopeEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -267,9 +258,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.GyroscopeEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting linear gyroscope data to API.");
@@ -291,11 +283,6 @@ public class DatabaseService extends IntentService {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.MagneticEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -332,9 +319,14 @@ public class DatabaseService extends IntentService {
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.MagneticEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -342,9 +334,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.MagneticEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting linear magnetic data to API.");
@@ -366,11 +359,6 @@ public class DatabaseService extends IntentService {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.RotationEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -411,9 +399,14 @@ public class DatabaseService extends IntentService {
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.RotationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -421,9 +414,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.RotationEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting rotation data to API.");
@@ -444,12 +438,6 @@ public class DatabaseService extends IntentService {
         JSONObject dataIdsObject = new JSONObject();
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
-
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.LocationEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -486,9 +474,14 @@ public class DatabaseService extends IntentService {
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.LocationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -496,9 +489,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.LocationEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting location data to API.");
@@ -519,12 +513,6 @@ public class DatabaseService extends IntentService {
         JSONObject dataIdsObject = new JSONObject();
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
-
-        try {
-            dataIdsObject.put("dataType", SnapShotContract.DetectedActivityEntry.TABLE_NAME);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
         Cursor cursor = null;
         Integer recordsRead = 0;
@@ -555,15 +543,18 @@ public class DatabaseService extends IntentService {
                 responseObject.put("userId", username);
                 data.put(responseObject);
 
-
-
                 counter++;
 
                 if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
+                    dataIdsObject.put("dataType", SnapShotContract.DetectedActivityEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
-                    startPostDataService(data, dataIdsObject);
+                    submitDataToApi(data, dataIdsObject);
+                    //reset data and processedids
+                    data = new JSONArray();
+                    dataIdsObject = new JSONObject();
+                    dataIds = new JSONArray();
                     counter = 0;
                 }
             }
@@ -571,9 +562,10 @@ public class DatabaseService extends IntentService {
             //Catch remaining items < MAX_ENTRIES_PER_API_SUBMISSION
             if (data.length() > 0 ) {
                 //Bundle the array in the JSONObject
+                dataIdsObject.put("dataType", SnapShotContract.DetectedActivityEntry.TABLE_NAME);
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
-                startPostDataService(data, dataIdsObject);
+                submitDataToApi(data, dataIdsObject);
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting detected activity data to API.");
@@ -594,9 +586,118 @@ public class DatabaseService extends IntentService {
      * @throws JSONException
      */
     private void startPostDataService(JSONArray data, JSONObject dataIdsObject) throws JSONException {
-        Intent postIntent = new Intent(this, RemoteApiService.class);
+        Intent postIntent = new Intent(this, UpdateDataService.class);
         postIntent.putExtra("data", data.toString());
         postIntent.putExtra("dataIds", dataIdsObject.toString());
         startService(postIntent);
+    }
+
+
+    private void submitDataToApi(JSONArray dataArray, JSONObject dataIds) {
+        //Try to convert the data to a JsonArray
+        try {
+            //Check that the intent is carrying data
+            if ( dataArray == null || dataArray.length() <= 0) {
+                return;
+            }
+
+            ConnectivityManager mConnectionManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo networkInfo = mConnectionManager.getActiveNetworkInfo();
+
+            String dataType = "";
+            String api_route = "";
+
+            //Figure out which API endpoint to use based on the type of data being passed in
+            dataType = dataArray.optJSONObject(0).get("dataType").toString();
+            switch (dataType){
+                case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
+                    api_route = "androidLinearAccelerations";
+                    break;
+                case SnapShotContract.GyroscopeEntry.TABLE_NAME:
+                    api_route = "androidGyroscopes";
+                    break;
+                case SnapShotContract.MagneticEntry.TABLE_NAME:
+                    api_route = "androidMagnetics";
+                    break;
+                case SnapShotContract.RotationEntry.TABLE_NAME:
+                    api_route = "androidRotations";
+                    break;
+                case SnapShotContract.LocationEntry.TABLE_NAME:
+                    api_route = "androidLocations";
+                    break;
+                case SnapShotContract.DetectedActivityEntry.TABLE_NAME:
+                    api_route = "androidActivities";
+                    break;
+            }
+
+            //Verify that the user is connected to WIFI
+            if (networkInfo != null && networkInfo.isConnected() && networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
+                JSONObject requestData = new JSONObject();
+                //JSONArray dataPoints = dataArray.optJSONObject(0));
+                try {
+                    requestData.put("entries", dataArray);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+                InputStream is = null;
+                // Only display the first 500 characters of the retrieved
+                // web page content.
+
+                try {
+                    //Define the URL
+                    URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ api_route);
+
+                    String message = requestData.toString();
+
+                    //Open a connection
+                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                    //Set connection details
+                    connection.setReadTimeout(10000 /* milliseconds */);
+                    connection.setConnectTimeout(15000 /* milliseconds */);
+                    connection.setRequestMethod("POST");
+                    connection.setDoInput(true);
+                    connection.setDoOutput(true);
+
+                    //Set header details
+                    connection.setRequestProperty("Content-Type","application/json;charset=utf-8");
+                    connection.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+
+                    //Connect
+                    connection.connect();
+
+                    //Setup data to send
+                    OutputStream os = new BufferedOutputStream(connection.getOutputStream());
+                    os.write(message.getBytes());
+                    os.flush();
+
+                    int response = connection.getResponseCode();
+                    Log.d(TAG, "The response was: " + response);
+
+                    if (response == HttpURLConnection.HTTP_OK){
+                        //updateDataAsSubmitted(dataIds);
+                        Intent updateDatabaseIntent = new Intent(this, UpdateDataService.class);
+                        updateDatabaseIntent.putExtra("dataIdsIn", dataIds.toString());
+                        startService(updateDatabaseIntent);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (is != null) {
+                        try {
+                            is.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            } else {
+                // display error
+                Log.d(TAG, "WIFI is not connected, data can't be submitted");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

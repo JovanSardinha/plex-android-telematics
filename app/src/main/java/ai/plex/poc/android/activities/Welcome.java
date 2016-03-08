@@ -31,7 +31,7 @@ import android.widget.ToggleButton;
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.sensorListeners.SensorType;
-import ai.plex.poc.android.services.DatabaseService;
+import ai.plex.poc.android.services.UploadDataService;
 import ai.plex.poc.android.services.PredictiveMotionDataService;
 
 
@@ -283,7 +283,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
     private void submitData(String username) {
         // Start the background service
         //globalCounter = 0;
-        Intent submitDataIntent = new Intent("ai.plex.poc.android.submitData",null,this,DatabaseService.class);
+        Intent submitDataIntent = new Intent("ai.plex.poc.android.submitData",null,this,UploadDataService.class);
         submitDataIntent.putExtra("userId", username);
         startService(submitDataIntent);
     }
