@@ -15,7 +15,6 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
 /**
  * Created by terek on 02/03/16.
  * This service is responsible for updating data in the database
- * Currently only uploads data
  */
 public class UpdateDataService extends IntentService {
     //Tag for logging purposes
@@ -29,7 +28,9 @@ public class UpdateDataService extends IntentService {
     }
 
     /**
-     * Current default behaviour is to take in data and attempt to submit it to the remote api
+     * Current default behaviour is to take in the id of records in the
+     * database and mark them as submitted so that they do not get uploaded
+     * again
      * @param intent
      */
     @Override
@@ -57,7 +58,8 @@ public class UpdateDataService extends IntentService {
 
 
     /***
-     * Updates records in the database to indicate that they have been submitted to the API for every type of submitted data
+     * Updates records in the database to indicate that they have been submitted
+     * to the API
      * @param dataIds
      */
     private void updateDataAsSubmitted(JSONObject dataIds){

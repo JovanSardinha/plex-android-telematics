@@ -1,7 +1,6 @@
 package ai.plex.poc.android.services;
 
 import android.app.IntentService;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -22,6 +21,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
+import ai.plex.poc.android.Constants;
 import ai.plex.poc.android.database.SnapShotContract;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 
@@ -29,12 +29,8 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
  * Created by terek on 02/03/16.
  * This intent service is responsible for reading data from the database stored by the
  * predictive motion data service and uploading it to the server for analysis.
- * The service
  * */
 public class UploadDataService extends IntentService {
-    //Flag if the service is started
-    private static boolean isRunning = false;
-
     //Tag for logging purposes
     private static final String TAG = UploadDataService.class.getSimpleName();
 
@@ -44,15 +40,13 @@ public class UploadDataService extends IntentService {
 
     /**
      * Entry point into the intent service, the submitData action, reads
-     * recorded data from the database and submits it via the postDataService.
-     * The updateDataSubmitted updates data in the database to indicate it has been submitted
+     * recorded data from the database and submits it to the API
      * @param intent
      */
     @Override
     protected void onHandleIntent(Intent intent) {
         switch (intent.getAction()){
             case "ai.plex.poc.android.submitData":
-
                     String userId = intent.getStringExtra("userId");
                     submitLinearAcceleration(userId);
                     submitMagnetic(userId);
@@ -64,67 +58,7 @@ public class UploadDataService extends IntentService {
         }
     }
 
-    /***
-     * Updates records in the database to indicate that they have been submitted to the API for every type of submitted data
-     * @param dataIds
-     */
-    private void updateDataAsSubmitted(JSONObject dataIds){
-        try {
-            String dataType = dataIds.get("dataType").toString();
-            switch (dataType) {
-                case SnapShotContract.LinearAccelerationEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.LinearAccelerationEntry.TABLE_NAME, SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.LinearAccelerationEntry._ID);
-                    break;
-                case SnapShotContract.DetectedActivityEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.DetectedActivityEntry.TABLE_NAME, SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.DetectedActivityEntry._ID);
-                    break;
-                case SnapShotContract.GyroscopeEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.GyroscopeEntry.TABLE_NAME, SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.GyroscopeEntry._ID);
-                    break;
-                case SnapShotContract.LocationEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.LocationEntry.TABLE_NAME, SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.LocationEntry._ID);
-                    break;
-                case SnapShotContract.MagneticEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.MagneticEntry.TABLE_NAME, SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.MagneticEntry._ID);
-                    break;
-                case SnapShotContract.RotationEntry.TABLE_NAME:
-                    markDataAsSubmitted(dataIds.getJSONArray("data"), SnapShotContract.RotationEntry.TABLE_NAME, SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED, SnapShotContract.RotationEntry._ID);
-                    break;
-            }
-        } catch (Exception ex) {
-            Log.d(TAG, "updateDataAsSubmitted: " + ex.getMessage());
-            ex.printStackTrace();
-        }
-    }
-
-    /**
-     * Method updates the record in the database to identify that a record has been uploaded successfully
-     * @param ids
-     */
-    private void markDataAsSubmitted(JSONArray ids, String tableName, String columnName, String idColumn ){
-        try {
-            SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
-            String queryPart = " IN (";
-            for (int i = 0; i < ids.length(); i++) {
-                queryPart += String.valueOf(ids.get(i)) + ",";
-            }
-
-            //remove the last comma and add a closing bracket
-            queryPart = queryPart.substring(0, queryPart.lastIndexOf(',') - 1) + " )";
-
-            ContentValues values = new ContentValues();
-            values.put(columnName, "true");
-            String selection = idColumn + queryPart;
-            //String[] selectionArgs = {queryPart};
-            int result = db.update(tableName, values, selection, null);
-            Log.d(TAG, "markDataAsSubmitted: Updated record with _id " + result);
-        } catch (Exception ex){
-            Log.d(TAG, "markDataAsSubmitted: " + ex.getMessage());
-            ex.printStackTrace();
-        }
-    }
-
-    public void submitLinearAcceleration(String username) {
+    private void submitLinearAcceleration(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -166,7 +100,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.LinearAccelerationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -198,7 +132,7 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
-    public void submitGyroscope(String username) {
+    private void submitGyroscope(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -241,7 +175,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.GyroscopeEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -273,7 +207,7 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
-    public void submitMagnetic(String username) {
+    private void submitMagnetic(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -317,7 +251,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.MagneticEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -349,7 +283,7 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
-    public void submitRotation(String username) {
+    private void submitRotation(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -397,7 +331,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.RotationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -429,7 +363,7 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
-    public void submitLocation(String username) {
+    private void submitLocation(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -472,7 +406,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.LocationEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -504,7 +438,7 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
-    public void submitDetectedActivity(String username) {
+    private void submitDetectedActivity(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
         JSONArray data = new JSONArray();
@@ -545,7 +479,7 @@ public class UploadDataService extends IntentService {
 
                 counter++;
 
-                if (counter >= ai.plex.poc.android.activities.Constants.MAX_ENTRIES_PER_API_SUBMISSION){
+                if (counter >= Constants.MAX_ENTRIES_PER_API_SUBMISSION){
                     //Bundle the array in the JSONObject
                     dataIdsObject.put("dataType", SnapShotContract.DetectedActivityEntry.TABLE_NAME);
                     dataIdsObject.put("data", dataIds);
@@ -578,21 +512,10 @@ public class UploadDataService extends IntentService {
     }
 
     /**
-     * Start the post data service and provides it with the data to be posted along with identifiers
-     * of that data that can be used to update the data once it has been successfully posted
-     * @param data The data to be posted
-     * @param dataIdsObject The ids of the data to be posted along with an identifer of the type of
-     *                      data being submitted
-     * @throws JSONException
+     * Submits data to the API
+     * @param dataArray
+     * @param dataIds
      */
-    private void startPostDataService(JSONArray data, JSONObject dataIdsObject) throws JSONException {
-        Intent postIntent = new Intent(this, UpdateDataService.class);
-        postIntent.putExtra("data", data.toString());
-        postIntent.putExtra("dataIds", dataIdsObject.toString());
-        startService(postIntent);
-    }
-
-
     private void submitDataToApi(JSONArray dataArray, JSONObject dataIds) {
         //Try to convert the data to a JsonArray
         try {
@@ -646,7 +569,7 @@ public class UploadDataService extends IntentService {
 
                 try {
                     //Define the URL
-                    URL url = new URL("http://"+ ai.plex.poc.android.activities.Constants.IP_ADDRESS +"/"+ api_route);
+                    URL url = new URL("http://"+ Constants.IP_ADDRESS +"/"+ api_route);
 
                     String message = requestData.toString();
 

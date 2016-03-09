@@ -28,15 +28,20 @@ import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.ToggleButton;
-import ai.plex.poc.android.R;
+
+import ai.plex.poc.android.*;
+import ai.plex.poc.android.Constants;
 import ai.plex.poc.android.database.SnapShotDBHelper;
 import ai.plex.poc.android.sensorListeners.SensorType;
 import ai.plex.poc.android.services.UploadDataService;
 import ai.plex.poc.android.services.PredictiveMotionDataService;
 
-
-public class Welcome extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
-    private final static String TAG = Welcome.class.getSimpleName();
+/**
+ * This activity provides the UI to control the predictive motion data service running in
+ * the background
+ */
+public class PredictiveMotionManagementActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
+    private final static String TAG = PredictiveMotionManagementActivity.class.getSimpleName();
 
     // Constant for requesting location permissions
     final int requestLocationPermissionId = 123;
@@ -97,7 +102,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         // The filter's action is ACTIVITY_UPDATE_BROADCAST_ACTION
         IntentFilter activityUpdateIntentFilter = new IntentFilter(
-                ai.plex.poc.android.services.Constants.ACTIVITY_UPDATE_BROADCAST_ACTION);
+                ai.plex.poc.android.Constants.ACTIVITY_UPDATE_BROADCAST_ACTION);
 
         // Instantiates a new ActivityUpdateReceiver
         mActivityUpdateReceiver = new ActivityUpdateReceiver();
@@ -109,7 +114,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         // The filter's action is LOCATION_UPDATE_BROADCAST_ACTION
         IntentFilter locationIntentFilter = new IntentFilter(
-                ai.plex.poc.android.services.Constants.LOCATION_UPDATE_BROADCAST_ACTION);
+                Constants.LOCATION_UPDATE_BROADCAST_ACTION);
 
         // Instantiates a new LocationUpdateReceiver
         mLocationUpdateReceiver = new LocationUpdateReceiver();
@@ -127,10 +132,10 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
         Intent mServiceIntent = new Intent(this, PredictiveMotionDataService.class);
 
         if (!PredictiveMotionDataService.isRunning()) {
-            mServiceIntent.putExtra("ai.plex.poc.android.startService", true);
+            mServiceIntent.setAction(Constants.ACTIONS.START_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND);
             startService(mServiceIntent);
         }
-
+        //bind to the predictive motion data service running in the background
         bindService(mServiceIntent, mConnection, Context.BIND_AUTO_CREATE);
     }
 
@@ -147,7 +152,7 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         @Override
         public void onServiceDisconnected(ComponentName arg0) {
-            mBound = false;
+            //mBound = false;
             Log.d(TAG, "Unbound from PredictiveMotionDataService.");
         }
     };
@@ -362,8 +367,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            String activityName = intent.getStringExtra(ai.plex.poc.android.services.Constants.ACTIVITY_NAME);
-            int activityConfidence = intent.getIntExtra(ai.plex.poc.android.services.Constants.ACTIVITY_CONFIDENCE, -1);
+            String activityName = intent.getStringExtra(Constants.ACTIVITY_NAME);
+            int activityConfidence = intent.getIntExtra(Constants.ACTIVITY_CONFIDENCE, -1);
             TextView activityDetectorStatus = (TextView) findViewById(R.id.activityDetectorText);
             activityDetectorStatus.setText(activityName + " - " + activityConfidence);
 
@@ -380,8 +385,8 @@ public class Welcome extends AppCompatActivity implements ActivityCompat.OnReque
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            Double latitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LATITUDE, -1.0);
-            Double longitude = intent.getDoubleExtra(ai.plex.poc.android.services.Constants.LONGITUDE, -1.0);
+            Double latitude = intent.getDoubleExtra(Constants.LATITUDE, -1.0);
+            Double longitude = intent.getDoubleExtra(Constants.LONGITUDE, -1.0);
             TextView locationStatus = (TextView) findViewById(R.id.locationStatus);
             locationStatus.setText("[" + latitude + ", " + longitude+"]");
         }
