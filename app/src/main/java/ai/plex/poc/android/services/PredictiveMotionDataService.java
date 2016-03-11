@@ -57,11 +57,9 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
 
     private static final String TAG = PredictiveMotionDataService.class.getSimpleName();
 
-    //Used to allow sensor data to recorded on a separate thread
+    // Used to allow sensor data to recorded on a separate thread
     private static HandlerThread sensorHandlerThread;
     private static Handler sensorHandler;
-
-    //Copy of the instance manager
     private static SensorManager mSensorManager;
 
     //The listeners
@@ -82,12 +80,12 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     PendingIntent mLocationMonitoringIntent;
     PendingIntent mActivityRecognitionPendingIntent;
 
+    private static int sensorDelayInterval = 1000000; // microseconds
     private static long initialActivityDetectionRequestInterval = 1000;
     private static long activityDetectionRequestInterval = 1000;
     private static long maxActivityDetectionRequestInterval = 5 * 60 * 1000; // 5 min
-    private static final double minDistanceTravelled = 50; // Must travel 50 m in 20s in order to keep recording
+    private static final double minDistanceTravelled = 100; // Must travel 100 m in 20s in order to keep recording
     private static EvictingQueue<Location> recentLocations = EvictingQueue.create(20);
-
 
     // Binder given to clients
     private final IBinder mBinder = new MotionDataBinder();
@@ -123,7 +121,7 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
         gyroscopeSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         magneticSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
-        //Initialize sensor listeners / monitors
+        //Initialize sensor monitors
         linearAccelerationMonitor = new LinearAccelerationMonitor(this.getApplicationContext(), linearAccelerationSensor);
         rotationMonitor = new RotationMonitor(this.getApplicationContext(), rotationSensor);
         gyroscopeMonitor = new GyroscopeMonitor(this.getApplicationContext(), gyroscopeSensor);
@@ -152,15 +150,15 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
      * continues running in the background.
      */
     private void initializeForegroundService(){
-        //A foreground service requires to have a permanent notification in the user's
-        //notification bar
-        //Set the activity to launch from the notification bar
+        // A foreground service requires to have a permanent notification in the user's notification bar
+        // Set the activity to launch from the notification bar
         Intent notificationIntent = new Intent(this, PredictiveMotionManagementActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        //Create a pending intent to wrap the notification intent defined
+
+        // Create a pending intent to wrap the notification intent defined
         PendingIntent predictiveMotionManagementIntent = PendingIntent.getActivity(this, 0,notificationIntent, 0);
 
-        //Setup an icon in the notification bar
+        // Setup an icon in the notification bar
         Bitmap icon = BitmapFactory.decodeResource(getResources(),
                 R.drawable.common_google_signin_btn_icon_dark);
 
@@ -173,72 +171,11 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
                 .setOngoing(true).build();
 
         startForeground(Constants.NOTIFICATION_ID.FOREGROUND_SERVICE, notification);
-        /*} else if (intent.getAction() != null && intent.getAction().equals(
-                Constants.ACTIONS.STOP_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND)) {
-            Log.i(TAG, "Received Stop Foreground Intent");
-            stopForeground(true);
-            stopSelf();
-        } else {
-
-        }*/
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        try {
-            if (ActivityRecognitionResult.hasResult(intent)) {
-                ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
-                DetectedActivity detectedActivity = result.getMostProbableActivity();
-
-                int confidence = detectedActivity.getConfidence();
-                String mostProbableName = getActivityName(detectedActivity.getType());
-
-                new SensorDataWriter(this, SensorType.ACTIVITY_DETECTOR).writeData(detectedActivity);
-                Log.d(TAG, "Detected activity: " + mostProbableName + "(w confidence " + confidence + ")");
-
-                Intent localIntent = new Intent(Constants.ACTIVITY_UPDATE_BROADCAST_ACTION)
-                        // Puts the status into the Intent
-                        .putExtra(Constants.ACTIVITY_NAME, mostProbableName)
-                        .putExtra(Constants.ACTIVITY_CONFIDENCE, confidence);
-
-                // Broadcasts the Intent to receivers in this app.
-                LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
-
-                // In vehicle
-                if (!isDriving) {
-                    if (detectedActivity.getType() == DetectedActivity.ON_FOOT) {
-                        resetActivityDetectionRequestInterval();
-                        startDriving();
-                        startAllSensors();
-                    } else if (activityDetectionRequestInterval < maxActivityDetectionRequestInterval) {
-                        activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
-                        Log.d(TAG, "Backoff time updated to " + activityDetectionRequestInterval / 1000 + " s");
-                        startSensor(SensorType.ACTIVITY_DETECTOR);
-                    }
-                }
-            } else if (LocationResult.hasResult(intent)) {
-                Location location = LocationResult.extractResult(intent).getLastLocation();
-                new SensorDataWriter(this, SensorType.LOCATION).writeData(location);
-                Log.i(TAG, "New Location at: " + location.getLatitude() + "/" + location.getLongitude() + " at " + location.getSpeed());
-
-                Intent localIntent = new Intent(Constants.LOCATION_UPDATE_BROADCAST_ACTION)
-                        .putExtra(Constants.LATITUDE, location.getLatitude())
-                        .putExtra(Constants.LONGITUDE, location.getLongitude());
-
-                // Broadcasts the Intent to receivers in this app.
-                LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
-                recentLocations.add(location);
-                double recentDistance = recentDistanceTravelled();
-                if (recentLocations.size() == 20 && recentDistance < minDistanceTravelled) {
-                    stopSensors();
-                }
-                Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
-            } else {
-                Log.d(TAG, "Intent had no data returned");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        onHandleIntent(intent);
 
         // If we get killed, after returning from here, restart
         return START_STICKY;
@@ -277,22 +214,22 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
             case LINEAR_ACCELERATION:
                 if (linearAccelerationSensor != null)
                     mSensorManager.registerListener(linearAccelerationMonitor, linearAccelerationSensor,
-                            SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case ROTATION:
                 if (rotationSensor != null)
                     mSensorManager.registerListener(rotationMonitor, rotationSensor,
-                            SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case GYROSCOPE:
                 if (gyroscopeSensor != null)
                     mSensorManager.registerListener(gyroscopeMonitor, gyroscopeSensor,
-                            SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case MAGNETIC:
                 if (magneticSensor != null)
                     mSensorManager.registerListener(magneticMonitor, magneticSensor,
-                            SensorManager.SENSOR_DELAY_NORMAL, sensorHandler);
+                            sensorDelayInterval, sensorHandler);
                 break;
             case LOCATION:
                 if (mGoogleApiClient.isConnected()) {
@@ -316,7 +253,7 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     }
 
     /**
-     * Stops all the sensors
+     * Stops all sensors
      */
     public void stopAllSensors() {
         stopSensor(SensorType.LINEAR_ACCELERATION);
@@ -378,7 +315,7 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
                 recentLocations.add(location);
                 double recentDistance = recentDistanceTravelled();
                 if (recentLocations.size() == 20 && recentDistance < minDistanceTravelled) {
-                    stopSensors();
+                    stopDriving();
                 }
                  Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
             } else {
@@ -468,14 +405,17 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
         return interval;
     }
 
-    private void startDriving() {
-        isDriving = true;
+    private void updateIsDrivingFlag() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", true).commit();
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", true).commit();
-        Log.d(TAG, "Started driving.");
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", isDriving).commit();
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", isDriving).commit();
     }
 
+    private void startDriving() {
+        isDriving = true;
+        updateIsDrivingFlag();
+        Log.d(TAG, "Started driving.");
+    }
 
     private double distanceBetweenPoints(Location point1, Location point2) {
         if (point1 == null || point2 == null)
@@ -513,6 +453,16 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     }
 
     /**
+     * Stop location updates
+     */
+    private void stopLocationUpdates() {
+        if (mLocationMonitoringIntent != null) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, mLocationMonitoringIntent);
+            Log.d(TAG, "Location updates stopped.");
+        }
+    }
+
+    /**
      * Stop activity detection
      */
     private void stopActivityDetection() {
@@ -523,13 +473,13 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     }
 
     /**
-     * Stops all the sensors
+     * Stops all sensors except Activity Detection
+     * Mark isDriving = false
+     * Clear recent locations etc.
      */
-    private void stopSensors() {
+    private void stopDriving() {
         isDriving = false;
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", false).commit();
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", false).commit();
+        updateIsDrivingFlag();
         resetActivityDetectionRequestInterval();
         recentLocations.clear();
 
@@ -541,16 +491,6 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
         stopSensor(SensorType.LOCATION);
 
         Log.d(TAG, "Stopped driving.");
-    }
-
-    /**
-     * Stop location updates
-     */
-    private void stopLocationUpdates() {
-        if (mLocationMonitoringIntent != null) {
-            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, mLocationMonitoringIntent);
-            Log.d(TAG, "Location updates stopped.");
-        }
     }
 
     /**
@@ -595,8 +535,8 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     public void onDestroy() {
         isRunning = false;
         super.onDestroy();
-        //Stop respective components
-        stopSensors();
+        // Stop all components
+        stopDriving();
         stopLocationUpdates();
         stopActivityDetection();
     }
