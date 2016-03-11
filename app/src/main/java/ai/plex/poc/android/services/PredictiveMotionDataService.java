@@ -39,6 +39,7 @@ import java.util.Iterator;
 import ai.plex.poc.android.Constants;
 import ai.plex.poc.android.R;
 import ai.plex.poc.android.activities.PredictiveMotionManagementActivity;
+import ai.plex.poc.android.activities.WebAppActivity;
 import ai.plex.poc.android.sensorListeners.GyroscopeMonitor;
 import ai.plex.poc.android.sensorListeners.LinearAccelerationMonitor;
 import ai.plex.poc.android.sensorListeners.MagneticMonitor;
@@ -152,7 +153,7 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
     private void initializeForegroundService(){
         // A foreground service requires to have a permanent notification in the user's notification bar
         // Set the activity to launch from the notification bar
-        Intent notificationIntent = new Intent(this, PredictiveMotionManagementActivity.class);
+        Intent notificationIntent = new Intent(this, WebAppActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
 
         // Create a pending intent to wrap the notification intent defined
