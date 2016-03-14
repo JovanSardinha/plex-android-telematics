@@ -17,7 +17,7 @@ public class WebAppActivity extends Activity {
         setContentView(R.layout.activity_web_app);
         WebView mWebView = (WebView) findViewById(R.id.web_app);
         mWebView.getSettings().setJavaScriptEnabled(true);
-        mWebView.loadUrl("http://40.122.215.160:2910/");
+        mWebView.loadUrl("http://40.122.215.160:2910/mobile/overview");
 
         // Start the background service
         Intent mServiceIntent = new Intent(this, PredictiveMotionDataService.class);

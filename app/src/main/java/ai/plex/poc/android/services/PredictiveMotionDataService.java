@@ -292,12 +292,12 @@ public class PredictiveMotionDataService extends Service implements GoogleApiCli
 
                  // In vehicle
                  if (!isDriving) {
-                     if (detectedActivity.getType() == DetectedActivity.ON_FOOT) {
+                     if (detectedActivity.getType() == DetectedActivity.IN_VEHICLE) {
                         resetActivityDetectionRequestInterval();
                         startDriving();
                         startAllSensors();
                      } else if (activityDetectionRequestInterval < maxActivityDetectionRequestInterval) {
-                       activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
+                        activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
                         Log.d(TAG, "Backoff time updated to " + activityDetectionRequestInterval / 1000 + " s");
                         startSensor(SensorType.ACTIVITY_DETECTOR);
                      }

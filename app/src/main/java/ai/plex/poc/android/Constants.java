@@ -2,6 +2,7 @@ package ai.plex.poc.android;
 
 /**
  * Created by terek on 06/01/16.
+ * Contains constants used in the application
  */
 
 public final class Constants {
@@ -38,9 +39,13 @@ public final class Constants {
             "ai.plex.poc.android.LONGITUDE";
 
     public final class ACTIONS {
-        public static final String START_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND = "startPredictiveMotionServiceInForeground";
-        public static final String START_MAIN_ACTION = "startMainAction";
-        public static final String STOP_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND = "stopPredictiveMotionServiceInForeground";
+        public static final String START_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND = "ai.plex.poc.android.startPredictiveMotionServiceInForeground";
+        public static final String START_MAIN_ACTION = "ai.plex.poc.android.startMainAction";
+        public static final String STOP_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND = "ai.plex.poc.android.stopPredictiveMotionServiceInForeground";
+
+        //Upload Servcie
+        public static final String START_UPLOAD_SERVICE = "ai.plex.poc.android.startUploadService";
+        public static final String STOP_UPLOAD_SERVICE = "ai.plex.poc.android.stopUploadService";
     }
 
     public final class NOTIFICATION_ID {

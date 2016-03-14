@@ -1,6 +1,6 @@
 package ai.plex.poc.android.services;
 
-import android.app.IntentService;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -8,6 +8,12 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -27,37 +33,138 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
 
 /**
  * Created by terek on 02/03/16.
- * This intent service is responsible for reading data from the database stored by the
+ * This service is responsible for reading data from the database stored by the
  * predictive motion data service and uploading it to the server for analysis.
+ *
+ * The service supports soft interruption by setting the static variable terminationRequested
+ * to true.
+ *
+ * When the service is called with the action to stop it, this causes the service
+ * to set the terminateRequested variable to false. The methods executed as a part of the
+ * thread handler execution constantly check that variable and will stop looping through
+ * data once the variable is identified as true
  * */
-public class UploadDataService extends IntentService {
+public class UploadDataService extends Service {
+    // Handler that receives messages and executes the upload methods on a worker thread
+    private final class UploadDataServiceHandler extends Handler {
+
+        //Constructor that takes in the looper of the thread it is to be attached to
+        public UploadDataServiceHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            //Indicate that the service is running
+            isRunning = true;
+
+            String userId = (String) msg.obj;
+            if (userId != null) {
+                //The upload operation
+                uploadData((String) msg.obj);
+            }
+
+            //Reset running to false
+            isRunning = false;
+
+            //Stop the service, now that you are done
+            stopSelf();
+        }
+    }
+
+    //Control variable used to terminate the service
+    //The variable is volatile becuase it used to interrupt thread executing sequential submission tasks
+    private static volatile boolean terminateRequested = false;
+
+    //Variable that indicates if the service is currently running
+    private static volatile boolean isRunning = false;
+
+    //Thread and handler for executing the upload operations on a separate thread
+    private HandlerThread uploadDataServiceThread;
+    private UploadDataServiceHandler mUploadDataServiceHandler;
+
     //Tag for logging purposes
     private static final String TAG = UploadDataService.class.getSimpleName();
 
     public UploadDataService(){
-        super("UploadDataService");
     }
 
-    /**
-     * Entry point into the intent service, the submitData action, reads
-     * recorded data from the database and submits it to the API
-     * @param intent
-     */
     @Override
-    protected void onHandleIntent(Intent intent) {
-        switch (intent.getAction()){
-            case "ai.plex.poc.android.submitData":
-                    String userId = intent.getStringExtra("userId");
-                    submitLinearAcceleration(userId);
-                    submitMagnetic(userId);
-                    submitLocation(userId);
-                    submitDetectedActivity(userId);
-                    submitGyroscope(userId);
-                    submitRotation(userId);
-                break;
+    public void onCreate() {
+        super.onCreate();
+        //Initialize shared control variables
+        terminateRequested = false;
+        isRunning = false;
+
+        //Prepare worker threadHandler and handler
+        if (uploadDataServiceThread == null){
+            uploadDataServiceThread = new HandlerThread("UploadDataServiceThread", Thread.NORM_PRIORITY);
+            //Start the newly minted thread
+            uploadDataServiceThread.start();
+            //Get the looper to associate the handler with the newly created thread
+            mUploadDataServiceHandler = new UploadDataServiceHandler(uploadDataServiceThread.getLooper());
         }
     }
 
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        //Determine instructions
+        switch (intent.getAction()){
+            case Constants.ACTIONS.START_UPLOAD_SERVICE:
+                Log.d(TAG, "onStartCommand: Start Upload Service Action Received");
+
+                //Prevent multiple requests to upload the data
+                if (!isRunning) {
+                    //Pass information to the handler to execute
+                    Message msg = mUploadDataServiceHandler.obtainMessage();
+                    msg.arg1 = startId;
+                    msg.obj = intent.getStringExtra("userId");
+                    mUploadDataServiceHandler.sendMessage(msg);
+                }
+                break;
+            case Constants.ACTIONS.STOP_UPLOAD_SERVICE:
+                //Prevent stopping a service which is not running
+                if (isRunning) {
+                    terminateRequested = true;
+                    Log.d(TAG, "onStartCommand: Stop Upload Service Action Received");
+                } else {
+                    //Stop the service right away
+                    stopSelf();
+                }
+                break;
+        }
+
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    /**
+     * The submitData action, reads
+     * recorded data from the database and submits it to the API
+     * All methods called from this method support soft termination
+     * via the terminateRequested variable
+     * @param
+     */
+    private void uploadData(String userId) {
+        submitLinearAcceleration(userId);
+        submitMagnetic(userId);
+        submitLocation(userId);
+        submitDetectedActivity(userId);
+        submitGyroscope(userId);
+        submitRotation(userId);
+    }
+
+    /**
+     * Method submits acceleration data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitLinearAcceleration(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -75,7 +182,8 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME + " where " + SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            //Continue working unless terminated
+            while (cursor.moveToNext() && !terminateRequested) {
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_X));
                 float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Y));
@@ -132,6 +240,11 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
+    /**
+     * Method submits gyroscope data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitGyroscope(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -149,7 +262,7 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME + " where " + SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && !terminateRequested) {
 
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X));
@@ -207,6 +320,11 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
+    /**
+     * Method submits magnetic data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitMagnetic(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -225,7 +343,7 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME + " where " + SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && !terminateRequested) {
 
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.MagneticEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_X));
@@ -283,6 +401,11 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
+    /**
+     * Method submits rotation data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitRotation(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -301,7 +424,7 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME + " where " + SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && !terminateRequested) {
 
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.RotationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_X_SIN));
@@ -363,6 +486,11 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
+    /**
+     * Method submits location data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitLocation(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -380,7 +508,7 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.LocationEntry.TABLE_NAME + " where " + SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && !terminateRequested) {
 
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LocationEntry._ID));
                 float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LATITUDE));
@@ -427,7 +555,8 @@ public class UploadDataService extends IntentService {
                 dataIdsObject.put("data", dataIds);
                 //Call the post data service
                 submitDataToApi(data, dataIdsObject);
-            }
+            }ConnectivityManager mConnectionManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo networkInfo = mConnectionManager.getActiveNetworkInfo();
         } catch (Exception ex) {
             Log.e(TAG, "Error submitting location data to API.");
             ex.printStackTrace();
@@ -438,6 +567,11 @@ public class UploadDataService extends IntentService {
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
 
+    /**
+     * Method submits detected activity data and supports soft service termination requests
+     * by checking the terminationRequested variable
+     * @param username
+     */
     private void submitDetectedActivity(String username) {
         SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
         //This array contains the read data
@@ -455,7 +589,7 @@ public class UploadDataService extends IntentService {
             cursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME + " where " + SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
             int counter = 0;
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && !terminateRequested) {
 
                 Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
                 int name = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
@@ -621,6 +755,15 @@ public class UploadDataService extends IntentService {
         } catch (Exception e) {
             Log.e(TAG, e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        //Make sure that you destory the handler thread to free up resources
+        if (uploadDataServiceThread != null){
+            uploadDataServiceThread.quit();
         }
     }
 }

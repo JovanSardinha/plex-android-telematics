@@ -14,7 +14,8 @@ import ai.plex.poc.android.database.SnapShotDBHelper;
 
 /**
  * Created by terek on 02/03/16.
- * This service is responsible for updating data in the database
+ * This service is responsible for updating data in the database to indicate that
+ * records have been uploaded
  */
 public class UpdateDataService extends IntentService {
     //Tag for logging purposes
