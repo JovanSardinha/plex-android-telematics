@@ -1,12 +1,15 @@
 package ai.plex.poc.android.services;
 
 import android.Manifest;
-import android.app.IntentService;
+import android.app.Notification;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.location.Location;
@@ -16,6 +19,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
@@ -30,10 +34,12 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.common.collect.EvictingQueue;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
+import ai.plex.poc.android.Constants;
+import ai.plex.poc.android.R;
+import ai.plex.poc.android.activities.PredictiveMotionManagementActivity;
+import ai.plex.poc.android.activities.WebAppActivity;
 import ai.plex.poc.android.sensorListeners.GyroscopeMonitor;
 import ai.plex.poc.android.sensorListeners.LinearAccelerationMonitor;
 import ai.plex.poc.android.sensorListeners.MagneticMonitor;
@@ -43,18 +49,18 @@ import ai.plex.poc.android.sensorListeners.SensorType;
 
 /**
  * Created by ashish on 24/02/16.
+ * Predictive Motion Data Service is a foreground service that monitors sensor activity to
+ * start and stop recording sensor data
  */
-public class PredictiveMotionDataService extends IntentService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class PredictiveMotionDataService extends Service implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
     private static boolean isRunning = false;
     private static boolean isDriving = false;
 
     private static final String TAG = PredictiveMotionDataService.class.getSimpleName();
 
-    //Used to allow sensor data to recorded on a separate thread
+    // Used to allow sensor data to recorded on a separate thread
     private static HandlerThread sensorHandlerThread;
     private static Handler sensorHandler;
-
-    //Coy of the instance manage
     private static SensorManager mSensorManager;
 
     //The listeners
@@ -75,13 +81,12 @@ public class PredictiveMotionDataService extends IntentService implements Google
     PendingIntent mLocationMonitoringIntent;
     PendingIntent mActivityRecognitionPendingIntent;
 
-    private static int sensorDelayInterval = 1000000; // specified in microseconds
+    private static int sensorDelayInterval = 1000000; // microseconds
     private static long initialActivityDetectionRequestInterval = 1000;
     private static long activityDetectionRequestInterval = 1000;
     private static long maxActivityDetectionRequestInterval = 5 * 60 * 1000; // 5 min
     private static final double minDistanceTravelled = 100; // Must travel 100 m in 20s in order to keep recording
     private static EvictingQueue<Location> recentLocations = EvictingQueue.create(20);
-
 
     // Binder given to clients
     private final IBinder mBinder = new MotionDataBinder();
@@ -98,7 +103,6 @@ public class PredictiveMotionDataService extends IntentService implements Google
     }
 
     public PredictiveMotionDataService() {
-        super("PredictiveMotionDataService");
     }
 
     public static boolean isRunning() {
@@ -109,18 +113,19 @@ public class PredictiveMotionDataService extends IntentService implements Google
     public void onCreate() {
         super.onCreate();
 
+        //Initialize the location manager
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
+        //Initialize all the sensors
         linearAccelerationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-        linearAccelerationMonitor = new LinearAccelerationMonitor(this.getApplicationContext(), linearAccelerationSensor);
-
         rotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-        rotationMonitor = new RotationMonitor(this.getApplicationContext(), rotationSensor);
-
         gyroscopeSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        gyroscopeMonitor = new GyroscopeMonitor(this.getApplicationContext(), gyroscopeSensor);
-
         magneticSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+        //Initialize sensor monitors
+        linearAccelerationMonitor = new LinearAccelerationMonitor(this.getApplicationContext(), linearAccelerationSensor);
+        rotationMonitor = new RotationMonitor(this.getApplicationContext(), rotationSensor);
+        gyroscopeMonitor = new GyroscopeMonitor(this.getApplicationContext(), gyroscopeSensor);
         magneticMonitor = new MagneticMonitor(this.getApplicationContext(), magneticSensor);
 
         mLocationRequest = new LocationRequest()
@@ -136,6 +141,45 @@ public class PredictiveMotionDataService extends IntentService implements Google
                 .build();
 
         mGoogleApiClient.connect();
+
+        //Initialize service as a foreground service
+        initializeForegroundService();
+    }
+
+    /**
+     * Sets up the current service as a foreground service so it does not get terminated and
+     * continues running in the background.
+     */
+    private void initializeForegroundService(){
+        // A foreground service requires to have a permanent notification in the user's notification bar
+        // Set the activity to launch from the notification bar
+        Intent notificationIntent = new Intent(this, WebAppActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+
+        // Create a pending intent to wrap the notification intent defined
+        PendingIntent predictiveMotionManagementIntent = PendingIntent.getActivity(this, 0,notificationIntent, 0);
+
+        // Setup an icon in the notification bar
+        Bitmap icon = BitmapFactory.decodeResource(getResources(),
+                R.drawable.common_google_signin_btn_icon_dark);
+
+        Notification notification = new NotificationCompat.Builder(this)
+                .setContentTitle("Teleplex")
+                .setTicker("Teleplex")
+                .setContentIntent(predictiveMotionManagementIntent)
+                .setContentText("The intelligent telematics platform")
+                .setSmallIcon(R.drawable.common_google_signin_btn_icon_dark_pressed)
+                .setOngoing(true).build();
+
+        startForeground(Constants.NOTIFICATION_ID.FOREGROUND_SERVICE, notification);
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        onHandleIntent(intent);
+
+        // If we get killed, after returning from here, restart
+        return START_STICKY;
     }
 
     @Override
@@ -143,6 +187,21 @@ public class PredictiveMotionDataService extends IntentService implements Google
         return mBinder;
     }
 
+    /**
+     * Starts all the sensors
+     */
+    public void startAllSensors() {
+        startSensor(SensorType.LINEAR_ACCELERATION);
+        startSensor(SensorType.ROTATION);
+        startSensor(SensorType.GYROSCOPE);
+        startSensor(SensorType.MAGNETIC);
+        startSensor(SensorType.LOCATION);
+        startSensor(SensorType.ACTIVITY_DETECTOR);
+    }
+
+    /***
+     * Starts a sensor on the sensors thread
+     */
     public void startSensor(SensorType sensorType) {
         // Create new thread
         if (sensorHandlerThread == null) {
@@ -194,49 +253,9 @@ public class PredictiveMotionDataService extends IntentService implements Google
         }
     }
 
-    public void stopSensor(SensorType sensorType) {
-        // Unregister listeners
-        switch(sensorType) {
-            case LINEAR_ACCELERATION:
-                if (linearAccelerationMonitor != null && linearAccelerationSensor != null) {
-                    mSensorManager.unregisterListener(linearAccelerationMonitor, linearAccelerationSensor);
-                }
-                break;
-            case ROTATION:
-                if (rotationMonitor != null && rotationSensor != null) {
-                    mSensorManager.unregisterListener(rotationMonitor, rotationSensor);
-                }
-                break;
-            case GYROSCOPE:
-                if (gyroscopeMonitor != null && gyroscopeSensor != null) {
-                    mSensorManager.unregisterListener(gyroscopeMonitor, gyroscopeSensor);
-                }
-                break;
-            case MAGNETIC:
-                if (magneticMonitor != null && magneticSensor != null) {
-                    mSensorManager.unregisterListener(magneticMonitor, magneticSensor);
-                }
-                break;
-            case LOCATION:
-                stopLocationUpdates();
-                break;
-            case ACTIVITY_DETECTOR:
-                stopActivityDetection();
-                break;
-            default:
-                Log.e(TAG, "startSensor: Invalid sensor type");
-        }
-    }
-
-    public void startAllSensors() {
-        startSensor(SensorType.LINEAR_ACCELERATION);
-        startSensor(SensorType.ROTATION);
-        startSensor(SensorType.GYROSCOPE);
-        startSensor(SensorType.MAGNETIC);
-        startSensor(SensorType.LOCATION);
-        startSensor(SensorType.ACTIVITY_DETECTOR);
-    }
-
+    /**
+     * Stops all sensors
+     */
     public void stopAllSensors() {
         stopSensor(SensorType.LINEAR_ACCELERATION);
         stopSensor(SensorType.ROTATION);
@@ -250,7 +269,7 @@ public class PredictiveMotionDataService extends IntentService implements Google
      *
      * @param intent
      */
-    @Override
+    //@Override
     protected void onHandleIntent(Intent intent) {
         try {
              if (ActivityRecognitionResult.hasResult(intent)) {
@@ -273,12 +292,12 @@ public class PredictiveMotionDataService extends IntentService implements Google
 
                  // In vehicle
                  if (!isDriving) {
-                      if (detectedActivity.getType() == DetectedActivity.IN_VEHICLE) {
+                     if (detectedActivity.getType() == DetectedActivity.IN_VEHICLE) {
                         resetActivityDetectionRequestInterval();
                         startDriving();
                         startAllSensors();
                      } else if (activityDetectionRequestInterval < maxActivityDetectionRequestInterval) {
-                       activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
+                        activityDetectionRequestInterval = nextActivityDetectionRequestInterval();
                         Log.d(TAG, "Backoff time updated to " + activityDetectionRequestInterval / 1000 + " s");
                         startSensor(SensorType.ACTIVITY_DETECTOR);
                      }
@@ -299,7 +318,7 @@ public class PredictiveMotionDataService extends IntentService implements Google
                 if (recentLocations.size() == 20 && recentDistance < minDistanceTravelled) {
                     stopDriving();
                 }
-                Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
+                 Log.d(TAG, "RecentDistanceTravelled :" + recentDistance);
             } else {
                 Log.d(TAG, "Intent had no data returned");
             }
@@ -365,13 +384,6 @@ public class PredictiveMotionDataService extends IntentService implements Google
         }
     }
 
-    private void stopLocationUpdates() {
-        if (mLocationMonitoringIntent != null) {
-            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, mLocationMonitoringIntent);
-            Log.d(TAG, "Location updates stopped.");
-        }
-    }
-
     private void startActivityDetection() {
         if (mActivityRecognitionPendingIntent == null) {
             Intent i = new Intent(this, PredictiveMotionDataService.class);
@@ -380,13 +392,6 @@ public class PredictiveMotionDataService extends IntentService implements Google
 
         ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mGoogleApiClient, activityDetectionRequestInterval, mActivityRecognitionPendingIntent);
         Log.d(TAG, "Activity detection started.");
-    }
-
-    private void stopActivityDetection() {
-        if (mActivityRecognitionPendingIntent != null) {
-            ActivityRecognition.ActivityRecognitionApi.removeActivityUpdates(mGoogleApiClient, mActivityRecognitionPendingIntent);
-            Log.d(TAG, "Activity detection stopped.");
-        }
     }
 
     private void resetActivityDetectionRequestInterval() {
@@ -401,30 +406,16 @@ public class PredictiveMotionDataService extends IntentService implements Google
         return interval;
     }
 
-    private void startDriving() {
-        isDriving = true;
+    private void updateIsDrivingFlag() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", true).commit();
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", true).commit();
-        Log.d(TAG, "Started driving.");
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", isDriving).commit();
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", isDriving).commit();
     }
 
-    private void stopDriving() {
-        isDriving = false;
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isRecording", false).commit();
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("isDriving", false).commit();
-        resetActivityDetectionRequestInterval();
-        recentLocations.clear();
-
-        // Stop everything but activity detection
-        stopSensor(SensorType.LINEAR_ACCELERATION);
-        stopSensor(SensorType.GYROSCOPE);
-        stopSensor(SensorType.ROTATION);
-        stopSensor(SensorType.MAGNETIC);
-        stopSensor(SensorType.LOCATION);
-
-        Log.d(TAG, "Stopped driving.");
+    private void startDriving() {
+        isDriving = true;
+        updateIsDrivingFlag();
+        Log.d(TAG, "Started driving.");
     }
 
     private double distanceBetweenPoints(Location point1, Location point2) {
@@ -462,10 +453,90 @@ public class PredictiveMotionDataService extends IntentService implements Google
         return distance;
     }
 
+    /**
+     * Stop location updates
+     */
+    private void stopLocationUpdates() {
+        if (mLocationMonitoringIntent != null) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, mLocationMonitoringIntent);
+            Log.d(TAG, "Location updates stopped.");
+        }
+    }
+
+    /**
+     * Stop activity detection
+     */
+    private void stopActivityDetection() {
+        if (mActivityRecognitionPendingIntent != null) {
+            ActivityRecognition.ActivityRecognitionApi.removeActivityUpdates(mGoogleApiClient, mActivityRecognitionPendingIntent);
+            Log.d(TAG, "Activity detection stopped.");
+        }
+    }
+
+    /**
+     * Stops all sensors except Activity Detection
+     * Mark isDriving = false
+     * Clear recent locations etc.
+     */
+    private void stopDriving() {
+        isDriving = false;
+        updateIsDrivingFlag();
+        resetActivityDetectionRequestInterval();
+        recentLocations.clear();
+
+        // Stop everything but activity detection
+        stopSensor(SensorType.LINEAR_ACCELERATION);
+        stopSensor(SensorType.GYROSCOPE);
+        stopSensor(SensorType.ROTATION);
+        stopSensor(SensorType.MAGNETIC);
+        stopSensor(SensorType.LOCATION);
+
+        Log.d(TAG, "Stopped driving.");
+    }
+
+    /**
+     * Stops a sensor
+     * @param sensorType
+     */
+    public void stopSensor(SensorType sensorType) {
+        // Unregister listeners
+        switch(sensorType) {
+            case LINEAR_ACCELERATION:
+                if (linearAccelerationMonitor != null && linearAccelerationSensor != null) {
+                    mSensorManager.unregisterListener(linearAccelerationMonitor, linearAccelerationSensor);
+                }
+                break;
+            case ROTATION:
+                if (rotationMonitor != null && rotationSensor != null) {
+                    mSensorManager.unregisterListener(rotationMonitor, rotationSensor);
+                }
+                break;
+            case GYROSCOPE:
+                if (gyroscopeMonitor != null && gyroscopeSensor != null) {
+                    mSensorManager.unregisterListener(gyroscopeMonitor, gyroscopeSensor);
+                }
+                break;
+            case MAGNETIC:
+                if (magneticMonitor != null && magneticSensor != null) {
+                    mSensorManager.unregisterListener(magneticMonitor, magneticSensor);
+                }
+                break;
+            case LOCATION:
+                stopLocationUpdates();
+                break;
+            case ACTIVITY_DETECTOR:
+                stopActivityDetection();
+                break;
+            default:
+                Log.e(TAG, "startSensor: Invalid sensor type");
+        }
+    }
+
     @Override
     public void onDestroy() {
         isRunning = false;
         super.onDestroy();
+        // Stop all components
         stopDriving();
         stopLocationUpdates();
         stopActivityDetection();

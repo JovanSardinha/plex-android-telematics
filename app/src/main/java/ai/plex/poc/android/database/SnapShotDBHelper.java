@@ -22,6 +22,8 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
+    /**This accessor is synchronized to ensure that only one thread can access and modify the database
+     * instance at once to ensure data consistency**/
     public static synchronized SnapShotDBHelper getsInstance(Context context){
         if (sInstance == null){
             sInstance = new SnapShotDBHelper(context.getApplicationContext());
@@ -37,7 +39,8 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 LinearAccelerationEntry.COLUMN_X + " REAL NOT NULL, " +
                 LinearAccelerationEntry.COLUMN_Y + " REAL NOT NULL, " +
                 LinearAccelerationEntry.COLUMN_Z + " REAL NOT NULL, " +
-                LinearAccelerationEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
+                LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
+                LinearAccelerationEntry.COLUMN_IS_DRIVING + " STRING NOT NULL" +");";
 
         db.execSQL(SQL_CREATE_LINEAR_ACCELERATION);
 
@@ -47,6 +50,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 GyroscopeEntry.COLUMN_ANGULAR_SPEED_X + " REAL NOT NULL, " +
                 GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y + " REAL NOT NULL, " +
                 GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z + " REAL NOT NULL, " +
+                GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
                 GyroscopeEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_GYROSCOPE);
@@ -59,6 +63,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 RotationEntry.COLUMN_Z_SIN + " REAL NOT NULL, " +
                 RotationEntry.COLUMN_ACCURACY + " REAL NOT NULL, " +
                 RotationEntry.COLUMN_COS + " REAL NOT NULL, " +
+                RotationEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
                 RotationEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_ROTATION);
@@ -69,6 +74,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 MagneticEntry.COLUMN_X + " REAL NOT NULL, " +
                 MagneticEntry.COLUMN_Y + " REAL NOT NULL, " +
                 MagneticEntry.COLUMN_Z + " REAL NOT NULL, " +
+                MagneticEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
                 MagneticEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_MAGNETIC);
@@ -79,6 +85,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 LocationEntry.COLUMN_LONGITUDE + " REAL NOT NULL, " +
                 LocationEntry.COLUMN_LATITUDE + " REAL NOT NULL, " +
                 LocationEntry.COLUMN_SPEED + " REAL NOT NULL, " +
+                LocationEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
                 LocationEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_LOCATION);
@@ -88,6 +95,7 @@ public class SnapShotDBHelper extends SQLiteOpenHelper {
                 DetectedActivityEntry.COLUMN_TIMESTAMP + " INTEGER NOT NULL, " +
                 DetectedActivityEntry.COLUMN_NAME + " INTEGER NOT NULL, " +
                 DetectedActivityEntry.COLUMN_CONFIDENCDE + " INTEGER NOT NULL, "+
+                DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED + " STRING NOT NULL, " +
                 DetectedActivityEntry.COLUMN_IS_DRIVING + " STRING NOT NULL"+");";
 
         db.execSQL(SQL_CREATE_DETECTED_ACTIVITY);
