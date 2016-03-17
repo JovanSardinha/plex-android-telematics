@@ -38,6 +38,8 @@ public final class Constants {
     public static final String LONGITUDE =
             "ai.plex.poc.android.LONGITUDE";
 
+    public static final String SHARED_PREFERENCES_FILE = "com.ai.plex.poc.android.prefsFile";
+
     public final class ACTIONS {
         public static final String START_PREDICTIVE_MOTION_SERVICE_IN_FOREGROUND = "ai.plex.poc.android.startPredictiveMotionServiceInForeground";
         public static final String START_MAIN_ACTION = "ai.plex.poc.android.startMainAction";

@@ -36,7 +36,7 @@ public class ConnectivityBroadcastReceiver extends BroadcastReceiver {
                     //Start an intent to start the upload service
                     Intent mIntent = new Intent(Constants.ACTIONS.START_UPLOAD_SERVICE,null, context, UploadDataService.class);
                     //Add userId as an extra
-                    mIntent.putExtra("userId", PreferenceManager.getDefaultSharedPreferences(context).getString("userId", "default_user"));
+                    mIntent.putExtra("userId", context.getSharedPreferences(Constants.SHARED_PREFERENCES_FILE, Context.MODE_PRIVATE).getString("userId","Default_user"));
                     //Start the service
                     context.startService(mIntent);
 

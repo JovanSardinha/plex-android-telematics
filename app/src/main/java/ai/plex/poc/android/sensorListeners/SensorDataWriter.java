@@ -83,8 +83,14 @@ public class SensorDataWriter {
                             values.put(SnapShotContract.RotationEntry.COLUMN_X_SIN, event.values[0]);
                             values.put(SnapShotContract.RotationEntry.COLUMN_Y_SIN, event.values[1]);
                             values.put(SnapShotContract.RotationEntry.COLUMN_Z_SIN, event.values[2]);
-                            values.put(SnapShotContract.RotationEntry.COLUMN_COS, event.values[3]);
-                            values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, event.values[4]);
+                            //This is added because the 4 and 5th values were added in a later version of the API
+                            if (event.values.length > 3) {
+                                values.put(SnapShotContract.RotationEntry.COLUMN_COS, event.values[3]  );
+                                values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, event.values[4]);
+                            } else {
+                                values.put(SnapShotContract.RotationEntry.COLUMN_COS, 0);
+                                values.put(SnapShotContract.RotationEntry.COLUMN_ACCURACY, 0);
+                            }
                             values.put(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING, String.valueOf(isDriving));
                             values.put(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP, new Date().getTime());
                             values.put(SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED, "false");

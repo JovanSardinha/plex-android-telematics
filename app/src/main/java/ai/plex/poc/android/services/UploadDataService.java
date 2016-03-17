@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -26,6 +27,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 import ai.plex.poc.android.Constants;
 import ai.plex.poc.android.database.SnapShotContract;
@@ -83,6 +86,17 @@ public class UploadDataService extends Service {
     //Thread and handler for executing the upload operations on a separate thread
     private HandlerThread uploadDataServiceThread;
     private UploadDataServiceHandler mUploadDataServiceHandler;
+
+    /*Query cursors, the reason they are created on the service level
+    it is avoid having to recreate the cursors for every batch
+    Batches are used to parallize the submission of the data*/
+    private Cursor linearAccelerationCursor;
+    private Cursor gyroscopeCursor;
+    private Cursor rotationCursor;
+    private Cursor magneticCursor;
+    private Cursor locationCursor;
+    private Cursor detectedActivityCursor;
+    private SQLiteDatabase db;
 
     //Tag for logging purposes
     private static final String TAG = UploadDataService.class.getSimpleName();
@@ -152,21 +166,170 @@ public class UploadDataService extends Service {
      * @param
      */
     private void uploadData(String userId) {
-        submitLinearAcceleration(userId);
-        submitMagnetic(userId);
-        submitLocation(userId);
-        submitDetectedActivity(userId);
-        submitGyroscope(userId);
-        submitRotation(userId);
+        //Compute the number of records to be uploaded for each type of reading
+        HashMap<String, Long> counts = getNumOfRecordsToUpload();
+
+        //Identify the ideal batch size using the minimum square root of the total records for
+        //all types of records
+        ArrayList<Long> sizes = new ArrayList<>();
+
+        //Total
+        long totalRecords = counts.get(SnapShotContract.LinearAccelerationEntry.TABLE_NAME) +
+                            counts.get(SnapShotContract.GyroscopeEntry.TABLE_NAME) +
+                            counts.get(SnapShotContract.RotationEntry.TABLE_NAME) +
+                            counts.get(SnapShotContract.MagneticEntry.TABLE_NAME) +
+                            counts.get(SnapShotContract.DetectedActivityEntry.TABLE_NAME) +
+                            counts.get(SnapShotContract.LocationEntry.TABLE_NAME);
+
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.LinearAccelerationEntry.TABLE_NAME))));
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.GyroscopeEntry.TABLE_NAME))));
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.RotationEntry.TABLE_NAME))));
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.MagneticEntry.TABLE_NAME))));
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.DetectedActivityEntry.TABLE_NAME))));
+        sizes.add(Math.round(Math.sqrt(counts.get(SnapShotContract.LocationEntry.TABLE_NAME))));
+
+        //batch size
+        Long batchSize = Constants.MAX_ENTRIES_PER_API_SUBMISSION * 10l;
+
+        //Records processed
+        Long totalProcessedRecords = 0l;
+        Long processedLinearAccelerationRecords = 0l;
+        Long processedGyroscopeRecords = 0l;
+        Long processedMagnometerRecords= 0l;
+        Long processedRotationRecords = 0l;
+        Long processedLocationRecords = 0l;
+        Long processedActivityRecords = 0l;
+
+
+        //Use a try block with a finally clause to process the data and close the cursors afterwards
+        try {
+
+            //This approach ensures that records are uploaded in a parallel fashion rather than serial fashion
+            while (totalProcessedRecords < totalRecords && !terminateRequested) {
+
+                if (processedLinearAccelerationRecords < counts.get(SnapShotContract.LinearAccelerationEntry.TABLE_NAME)) {
+                    submitLinearAcceleration(userId, batchSize);
+                    processedLinearAccelerationRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+                if (processedGyroscopeRecords < counts.get(SnapShotContract.GyroscopeEntry.TABLE_NAME)) {
+                    submitGyroscope(userId, batchSize);
+                    processedGyroscopeRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+                if (processedMagnometerRecords < counts.get(SnapShotContract.MagneticEntry.TABLE_NAME)) {
+                    submitMagnetic(userId, batchSize);
+                    processedMagnometerRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+                if (processedLocationRecords < counts.get(SnapShotContract.LocationEntry.TABLE_NAME)) {
+                    submitLocation(userId, batchSize);
+                    processedLocationRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+                if (processedActivityRecords < counts.get(SnapShotContract.DetectedActivityEntry.TABLE_NAME)) {
+                    submitDetectedActivity(userId, batchSize);
+                    processedActivityRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+                if (processedRotationRecords < counts.get(SnapShotContract.RotationEntry.TABLE_NAME)) {
+                    submitRotation(userId, batchSize);
+                    processedRotationRecords += batchSize;
+                    totalProcessedRecords += batchSize;
+                }
+
+
+            }
+        } catch (Exception ex){
+            Log.d(TAG, "uploadData: " + ex.getMessage());
+            ex.printStackTrace();
+        } finally {
+            //Clear all resources
+            if (linearAccelerationCursor != null) {
+                linearAccelerationCursor.close();
+                linearAccelerationCursor = null;
+            }
+            if (gyroscopeCursor != null) {
+                gyroscopeCursor.close();
+                gyroscopeCursor = null;
+            }
+            if (magneticCursor != null) {
+                magneticCursor.close();
+                magneticCursor = null;
+            }
+            if (locationCursor != null) {
+                locationCursor.close();
+                locationCursor = null;
+            }
+            if (rotationCursor != null) {
+                rotationCursor.close();
+                rotationCursor = null;
+            }
+            if (detectedActivityCursor != null) {
+                detectedActivityCursor.close();
+                detectedActivityCursor = null;
+            }
+            if (db != null)
+                db.close();
+                db = null;
+        }
     }
 
     /**
-     * Method submits acceleration data and supports soft service termination requests
+     * A method that determines the number of records that
+     * need to be uploaded for all the types of records
+     * @return
+     */
+    private HashMap<String, Long> getNumOfRecordsToUpload(){
+        try {
+            //Get an instance of the database
+            SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
+            //Dictionary to host the result of the count
+            HashMap<String, Long> results = new HashMap<>();
+
+            String selection = SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.LinearAccelerationEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            selection = SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.RotationEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            selection = SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.GyroscopeEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            selection = SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.MagneticEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            selection = SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.LocationEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            selection = SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'";
+            results.put(SnapShotContract.DetectedActivityEntry.TABLE_NAME, DatabaseUtils.queryNumEntries(db, SnapShotContract.LinearAccelerationEntry.TABLE_NAME, selection));
+
+            return results;
+        } catch (Exception ex){
+            Log.d(TAG, "getNumOfRecordsToUpload: " + ex.getMessage());
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * A method submits a specified number of acceleration data points and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitLinearAcceleration(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitLinearAcceleration(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -175,24 +338,31 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME + " where " + SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+            if (linearAccelerationCursor == null)
+                linearAccelerationCursor = db.rawQuery("Select * from " + SnapShotContract.LinearAccelerationEntry.TABLE_NAME + " where " + SnapShotContract.LinearAccelerationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
+            //Counter is used to chunk the read records for submission to the API and does not interfere with the counts
+            //requested
             int counter = 0;
 
-            //Continue working unless terminated
-            while (cursor.moveToNext() && !terminateRequested) {
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_X));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Y));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Z));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING));
+            //Continue working unless terminated or reached the requested number of records to submit
+            while (linearAccelerationCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
+                Integer id = linearAccelerationCursor.getInt(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry._ID));
+                float x = linearAccelerationCursor.getFloat(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_X));
+                float y = linearAccelerationCursor.getFloat(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Y));
+                float z = linearAccelerationCursor.getFloat(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_Z));
+                long timestamp = linearAccelerationCursor.getLong(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_TIMESTAMP));
+                String isDriving = linearAccelerationCursor.getString(linearAccelerationCursor.getColumnIndex(SnapShotContract.LinearAccelerationEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -214,7 +384,7 @@ public class UploadDataService extends Service {
                     dataIdsObject.put("data", dataIds);
                     //Call the post data service
                     submitDataToApi(data, dataIdsObject);
-                    //reset data and processedids
+                    //reset data and processed ids
                     data = new JSONArray();
                     dataIdsObject = new JSONObject();
                     dataIds = new JSONArray();
@@ -234,8 +404,8 @@ public class UploadDataService extends Service {
             Log.e(TAG, "Error submitting linear acceleration data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
+            //cursor.close();
+            //db.close();
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
@@ -244,9 +414,13 @@ public class UploadDataService extends Service {
      * Method submits gyroscope data and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitGyroscope(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitGyroscope(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -255,24 +429,29 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME + " where " + SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+            if (gyroscopeCursor == null)
+                gyroscopeCursor = db.rawQuery("Select * from " + SnapShotContract.GyroscopeEntry.TABLE_NAME + " where " + SnapShotContract.GyroscopeEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
             int counter = 0;
 
-            while (cursor.moveToNext() && !terminateRequested) {
+            while (gyroscopeCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
 
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING));
+                Integer id = gyroscopeCursor.getInt(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry._ID));
+                float x = gyroscopeCursor.getFloat(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_X));
+                float y = gyroscopeCursor.getFloat(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Y));
+                float z = gyroscopeCursor.getFloat(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_ANGULAR_SPEED_Z));
+                long timestamp = gyroscopeCursor.getLong(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_TIMESTAMP));
+                String isDriving = gyroscopeCursor.getString(gyroscopeCursor.getColumnIndex(SnapShotContract.GyroscopeEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -314,8 +493,8 @@ public class UploadDataService extends Service {
             Log.e(TAG, "Error submitting linear gyroscope data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
+            //gyroscopeCursor.close();
+            //db.close();
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
@@ -324,9 +503,13 @@ public class UploadDataService extends Service {
      * Method submits magnetic data and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitMagnetic(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitMagnetic(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -335,25 +518,29 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME + " where " + SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+            if (magneticCursor == null)
+                magneticCursor = db.rawQuery("Select * from " + SnapShotContract.MagneticEntry.TABLE_NAME + " where " + SnapShotContract.MagneticEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
             int counter = 0;
 
-            while (cursor.moveToNext() && !terminateRequested) {
+            while (magneticCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
 
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.MagneticEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_X));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Y));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Z));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING));
+                Integer id = magneticCursor.getInt(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry._ID));
+                float x = magneticCursor.getFloat(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_X));
+                float y = magneticCursor.getFloat(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Y));
+                float z = magneticCursor.getFloat(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_Z));
+                long timestamp = magneticCursor.getLong(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_TIMESTAMP));
+                String isDriving = magneticCursor.getString(magneticCursor.getColumnIndex(SnapShotContract.MagneticEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -395,8 +582,8 @@ public class UploadDataService extends Service {
             Log.e(TAG, "Error submitting linear magnetic data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
+            //magneticCursor.close();
+            //db.close();
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
@@ -405,9 +592,13 @@ public class UploadDataService extends Service {
      * Method submits rotation data and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitRotation(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitRotation(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -416,27 +607,31 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME + " where " + SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+            if (rotationCursor == null)
+                rotationCursor = db.rawQuery("Select * from " + SnapShotContract.RotationEntry.TABLE_NAME + " where " + SnapShotContract.RotationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
             int counter = 0;
 
-            while (cursor.moveToNext() && !terminateRequested) {
+            while (rotationCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
 
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.RotationEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_X_SIN));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Y_SIN));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Z_SIN));
-                float cos = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_COS));
-                float accuracy = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_ACCURACY));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING));
+                Integer id = rotationCursor.getInt(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry._ID));
+                float x = rotationCursor.getFloat(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_X_SIN));
+                float y = rotationCursor.getFloat(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Y_SIN));
+                float z = rotationCursor.getFloat(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_Z_SIN));
+                float cos = rotationCursor.getFloat(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_COS));
+                float accuracy = rotationCursor.getFloat(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_ACCURACY));
+                long timestamp = rotationCursor.getLong(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_TIMESTAMP));
+                String isDriving = rotationCursor.getString(rotationCursor.getColumnIndex(SnapShotContract.RotationEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -480,8 +675,8 @@ public class UploadDataService extends Service {
             Log.e(TAG, "Error submitting rotation data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
+            //rotationCursor.close();
+            //db.close();
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
@@ -490,9 +685,13 @@ public class UploadDataService extends Service {
      * Method submits location data and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitLocation(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitLocation(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -501,24 +700,30 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.LocationEntry.TABLE_NAME + " where " + SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+
+            if (locationCursor == null)
+                locationCursor = db.rawQuery("Select * from " + SnapShotContract.LocationEntry.TABLE_NAME + " where " + SnapShotContract.LocationEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
             int counter = 0;
 
-            while (cursor.moveToNext() && !terminateRequested) {
+            while (locationCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
 
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.LocationEntry._ID));
-                float x = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LATITUDE));
-                float y = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LONGITUDE));
-                float z = cursor.getFloat(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_SPEED));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING));
+                Integer id = locationCursor.getInt(locationCursor.getColumnIndex(SnapShotContract.LocationEntry._ID));
+                float x = locationCursor.getFloat(locationCursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LATITUDE));
+                float y = locationCursor.getFloat(locationCursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_LONGITUDE));
+                float z = locationCursor.getFloat(locationCursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_SPEED));
+                long timestamp = locationCursor.getLong(locationCursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_TIMESTAMP));
+                String isDriving = locationCursor.getString(locationCursor.getColumnIndex(SnapShotContract.LocationEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -558,11 +763,10 @@ public class UploadDataService extends Service {
             }ConnectivityManager mConnectionManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo networkInfo = mConnectionManager.getActiveNetworkInfo();
         } catch (Exception ex) {
+
             Log.e(TAG, "Error submitting location data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
@@ -571,9 +775,13 @@ public class UploadDataService extends Service {
      * Method submits detected activity data and supports soft service termination requests
      * by checking the terminationRequested variable
      * @param username
+     * @param countRequested
      */
-    private void submitDetectedActivity(String username) {
-        SQLiteDatabase db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+    private void submitDetectedActivity(String username, Long countRequested) {
+        //Avoid having to get the database if there is an existing instance
+        if (db == null)
+            db = SnapShotDBHelper.getsInstance(this).getWritableDatabase();
+
         //This array contains the read data
         JSONArray data = new JSONArray();
 
@@ -582,23 +790,28 @@ public class UploadDataService extends Service {
         //This array will hold all the ids and will be included in the dataIdsObject
         JSONArray dataIds = new JSONArray();
 
-        Cursor cursor = null;
         Integer recordsRead = 0;
 
         try {
-            cursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME + " where " + SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+            //The reason for this is to avoid having to ask for the data again in between batch requests
+            if (detectedActivityCursor == null)
+                detectedActivityCursor = db.rawQuery("Select * from " + SnapShotContract.DetectedActivityEntry.TABLE_NAME + " where " + SnapShotContract.DetectedActivityEntry.COLUMN_IS_RECORD_UPLOADED + " = 'false'", null);
+
             int counter = 0;
 
-            while (cursor.moveToNext() && !terminateRequested) {
+            while (detectedActivityCursor.moveToNext() && !terminateRequested && recordsRead < countRequested) {
 
-                Integer id = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
-                int name = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
-                int confidence = cursor.getInt(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE));
-                long timestamp = cursor.getLong(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP));
-                String isDriving = cursor.getString(cursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING));
+                Integer id = detectedActivityCursor.getInt(detectedActivityCursor.getColumnIndex(SnapShotContract.DetectedActivityEntry._ID));
+                int name = detectedActivityCursor.getInt(detectedActivityCursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_NAME));
+                int confidence = detectedActivityCursor.getInt(detectedActivityCursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_CONFIDENCDE));
+                long timestamp = detectedActivityCursor.getLong(detectedActivityCursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_TIMESTAMP));
+                String isDriving = detectedActivityCursor.getString(detectedActivityCursor.getColumnIndex(SnapShotContract.DetectedActivityEntry.COLUMN_IS_DRIVING));
 
                 //Add the id to the array of read ids
                 dataIds.put(id);
+
+                //Increase number of records read
+                recordsRead++;
 
                 JSONObject responseObject = new JSONObject();
                 responseObject.put("deviceType", "Android");
@@ -639,8 +852,7 @@ public class UploadDataService extends Service {
             Log.e(TAG, "Error submitting detected activity data to API.");
             ex.printStackTrace();
         } finally {
-            cursor.close();
-            db.close();
+            //Databse and cursor resrouces are freed in the finally block of the uploadData method
         }
         Log.d(TAG, "submitData: " + recordsRead + " were read!");
     }
