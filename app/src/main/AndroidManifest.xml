@@ -32,6 +32,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+        <receiver android:name=".broadcastReceivers.PowerBroadcastReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED"/>
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".services.PredictiveMotionDataService"
@@ -42,6 +47,8 @@
         <service
             android:name=".services.UpdateDataService"
             android:exported="false" />
+        <service android:name=".services.CleanUpService"
+            android:exported="false"/>
         <activity android:name=".activities.WebAppActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
